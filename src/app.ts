@@ -1,58 +1,46 @@
-import express, { Express, Request, Response } from "express";
+import express from "express";
 import cors from "cors";
-import apiRouter from "./routes/index";
-import { requestLogger } from "./middleware/logger";
-import { errorHandler } from "./middleware/errorHandler";
 
-const app: Express = express();
+import usersRouter from "./routes/user/routes";
 
-// CORS configuration - allow requests from React frontend
-const allowedOrigins = [
-  process.env.CLIENT_URL || "http://localhost:5173",
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-];
-
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, postman)
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(null, true); // Permissive in development
-      }
-    },
-    credentials: true,
-  })
-);
+const app = express();
 
 // Middleware
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+  }),
+);
+
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(requestLogger);
 
-// Base route
-app.get("/", (_req: Request, res: Response) => {
+// Health check
+app.get("/", (_req, res) => {
   res.json({
-    message: "Dental Consultation Backend API is running",
-    healthCheck: "/api/health",
-    frontend: process.env.CLIENT_URL || "http://localhost:5173",
+    success: true,
+    message: "Dental Appointment API is running",
   });
 });
 
-// API Routes
-app.use("/api", apiRouter);
+// Routes
+app.use("/api/users", usersRouter);
 
-// 404 Route Handler
-app.use((req: Request, res: Response) => {
-  res.status(404).json({
-    success: false,
-    error: `Cannot ${req.method} ${req.originalUrl}`,
-  });
-});
+// Error handler
+app.use(
+  (
+    err: any,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    console.error(err);
 
-// Error handling
-app.use(errorHandler);
+    res.status(500).json({
+      success: false,
+      error: "Internal server error",
+    });
+  },
+);
 
 export default app;
