@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import path from "path";
 
 import usersRouter from "./routes/user/routes";
 import appointmentRoutes from "./routes/appointment/routes";
@@ -30,6 +31,7 @@ app.get("/", (_req, res) => {
 // Routes
 app.use("/api/users", usersRouter);
 app.use("/api/appointment", appointmentRoutes);
+app.use("/uploads",express.static(path.join(process.cwd(), "uploads")));
 
 
 
@@ -43,9 +45,9 @@ app.use(
   ) => {
     console.error(err);
 
-    res.status(500).json({
+    res.status(err.status || err.statusCode || 500).json({
       success: false,
-      error: "Internal server error",
+      error: err.message || "Internal server error",
     });
   },
 );
