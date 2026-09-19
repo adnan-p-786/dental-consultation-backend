@@ -10,7 +10,7 @@ const router = Router();
 
 
 
-router.get("/get-appointments",async (_reqequest, res: Response, next: NextFunction) => {
+router.get("/get-appointments",async (req:Request, res: Response, next: NextFunction) => {
     try {
       const allAppointments = await db.select().from(appointments);
 

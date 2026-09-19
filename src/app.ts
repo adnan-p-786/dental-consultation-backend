@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 
 import usersRouter from "./routes/user/routes";
+import appointmentRoutes from "./routes/appointment/routes";
 
 const app = express();
 
@@ -23,8 +24,14 @@ app.get("/", (_req, res) => {
   });
 });
 
+
+
+
 // Routes
 app.use("/api/users", usersRouter);
+app.use("/api/appointment", appointmentRoutes);
+
+
 
 // Error handler
 app.use(
