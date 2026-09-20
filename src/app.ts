@@ -4,6 +4,7 @@ import path from "path";
 
 import usersRouter from "./routes/user/routes";
 import appointmentRoutes from "./routes/appointment/routes";
+import doctorRoutes from "./routes/doctor/route";
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.get("/", (_req, res) => {
 // Routes
 app.use("/api/users", usersRouter);
 app.use("/api/appointment", appointmentRoutes);
+app.use("/api/doctor", doctorRoutes);
 app.use("/uploads",express.static(path.join(process.cwd(), "uploads")));
 
 

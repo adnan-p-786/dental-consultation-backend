@@ -1,0 +1,1 @@
+ALTER TABLE "doctor" ADD COLUMN "phone_number" varchar(50) NOT NULL;
