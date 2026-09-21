@@ -3,6 +3,8 @@ import { Router, Request, Response, NextFunction } from "express";
 import { db } from "../../config/db";
 import { appointments } from "../../db/schema/appointmentBooking/appointment";
 import { upload } from "../../middleware/upload";
+import { sendAppointmentAcknowledgment } from "../../services/emailService";
+import { eq } from "drizzle-orm";
 
 const router = Router();
 
@@ -20,7 +22,9 @@ router.post("/create-appointment",
         tratmentType,
         preferredDate,
         preferredTime,
+        status,
         additionalDescription,
+        sendAcknowledgmentEmail,
       } = req.body;
 
       // -----------------------------
@@ -88,8 +92,47 @@ router.post("/create-appointment",
           preferredTime: preferredTime || null,
           additionalDescription: additionalDescription || null,
           supportingDocument: supportingDocument || null,
+          status:
+            typeof status === "string" && status.trim()
+              ? status.trim()
+              : "pending",
         })
         .returning();
+
+      // -----------------------------
+      // Optional acknowledgment email
+      // -----------------------------
+
+      let emailSent = false;
+
+      if (sendAcknowledgmentEmail === "true") {
+        try {
+          await sendAppointmentAcknowledgment(
+            appointment.patientEmail,
+            appointment.patientName,
+            {
+              id: appointment.id,
+              preferredDate: appointment.preferredDate,
+              preferredTime: appointment.preferredTime,
+              tratmentType: appointment.tratmentType,
+              contactMethod: appointment.contactMethod,
+            }
+          );
+
+          emailSent = true;
+
+          console.log(
+            `Acknowledgment email sent to ${appointment.patientEmail}`
+          );
+        } catch (emailError) {
+          // Appointment is already created.
+          // Don't fail the request if only email fails.
+          console.error(
+            "Appointment created, but email sending failed:",
+            emailError
+          );
+        }
+      }
 
       // -----------------------------
       // Response
@@ -98,13 +141,13 @@ router.post("/create-appointment",
       return res.status(201).json({
         success: true,
         message: "Appointment created successfully",
-
+        emailSent,
         data: appointment,
       });
     } catch (error) {
       next(error);
     }
-  },
+  }
 );
 
 router.get(
@@ -116,6 +159,44 @@ router.get(
       res.json({
         success: true,
         data: allAppointments,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.patch(
+  "/cancel-appointment/:id",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const numId = Number(id);
+
+      if (isNaN(numId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid appointment ID",
+        });
+      }
+
+      const [updated] = await db
+        .update(appointments)
+        .set({ status: "cancelled" })
+        .where(eq(appointments.id, numId))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({
+          success: false,
+          message: "Appointment not found",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Appointment cancelled successfully",
+        data: updated,
       });
     } catch (error) {
       next(error);

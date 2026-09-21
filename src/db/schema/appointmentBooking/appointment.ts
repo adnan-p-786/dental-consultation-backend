@@ -11,6 +11,7 @@ export const appointments = pgTable("appointments", {
   preferredTime: varchar("preferred_time", { length: 50 }),
   additionalDescription: text("additional_description"),
   supportingDocument:varchar("supporting_document", { length: 500 }),
+  status: varchar("status", { length: 50 }).notNull().default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
