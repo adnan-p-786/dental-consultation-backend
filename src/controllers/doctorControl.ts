@@ -5,14 +5,14 @@ import { doctor } from "../db/schema/doctor/doctor";
 
 // GET all doctors
 export const getAllDoctors = async (
-  _req: Request,
+  req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const allDoctors = await db.select().from(doctor);
 
-    return res.json({
+    res.json({
       success: true,
       data: allDoctors,
     });
@@ -21,11 +21,11 @@ export const getAllDoctors = async (
   }
 };
 
-// POST create new doctor
+// POST create new doctor with multer photo upload support
 export const addDoctor = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const {
@@ -144,7 +144,7 @@ export const addDoctor = async (
 export const deleteDoctor = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const rawId = Array.isArray(req.params.id)
@@ -173,7 +173,7 @@ export const deleteDoctor = async (
 export const updateDoctor = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const rawId = Array.isArray(req.params.id)
@@ -226,37 +226,15 @@ export const updateDoctor = async (
       updateData.specialization = specialization.trim();
     }
     if (workingHours || req.body.working_hours) {
-      updateData.workingHours = (
-        workingHours || req.body.working_hours
-      ).trim();
+      updateData.workingHours = (workingHours || req.body.working_hours).trim();
     }
     if (status) {
       updateData.status = status.trim();
     }
     if (req.file) {
       updateData.doctorPhoto = `/uploads/doctors/${req.file.filename}`;
-    } else if (doctorPhoto && String(doctorPhoto).trim() !== "") {
+    } else if (doctorPhoto !== undefined && doctorPhoto !== null) {
       updateData.doctorPhoto = String(doctorPhoto).trim();
-    }
-
-    if (Object.keys(updateData).length === 0) {
-      const [existingDoctor] = await db
-        .select()
-        .from(doctor)
-        .where(eq(doctor.id, id));
-
-      if (!existingDoctor) {
-        return res.status(404).json({
-          success: false,
-          message: "Doctor not found",
-        });
-      }
-
-      return res.json({
-        success: true,
-        message: "Doctor updated successfully",
-        data: existingDoctor,
-      });
     }
 
     const [updatedDoctor] = await db
@@ -286,7 +264,7 @@ export const updateDoctor = async (
 export const updateDoctorStatus = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const rawId = Array.isArray(req.params.id)
@@ -316,12 +294,4 @@ export const updateDoctorStatus = async (
   } catch (error) {
     next(error);
   }
-};
-
-export default {
-  getAllDoctors,
-  addDoctor,
-  deleteDoctor,
-  updateDoctor,
-  updateDoctorStatus,
 };

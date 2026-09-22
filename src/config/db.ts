@@ -22,6 +22,7 @@ export const pool = new Pool(
 pool.connect()
   .then((client) => {
     console.log("Connected to PostgreSQL database successfully");
+    console.log("DB port:", process.env.DB_PORT);
     client.release();
   })
   .catch((err) => console.error("PostgreSQL connection error:", err.message));

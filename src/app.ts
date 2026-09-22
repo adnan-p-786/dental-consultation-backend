@@ -4,7 +4,8 @@ import path from "path";
 
 import usersRouter from "./routes/user/routes";
 import appointmentRoutes from "./routes/appointment/routes";
-import doctorRoutes from "./routes/doctor/route";
+import doctorRoutes from "./routes/doctor/routes";
+import contactRoutes from "./routes/contact/routes";
 
 const app = express();
 
@@ -26,16 +27,12 @@ app.get("/", (_req, res) => {
   });
 });
 
-
-
-
 // Routes
 app.use("/api/users", usersRouter);
 app.use("/api/appointment", appointmentRoutes);
 app.use("/api/doctor", doctorRoutes);
-app.use("/uploads",express.static(path.join(process.cwd(), "uploads")));
-
-
+app.use("/api/contact", contactRoutes);
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Error handler
 app.use(
