@@ -87,13 +87,13 @@ export const createFirstAdmin = async (
     if (existingAdmin) {
       res.status(403).json({
         success: false,
-        error: "An admin already exists",
+        error: "Admin already exists",
       });
       return;
     }
 
     // -----------------------------
-    // CREATE FIRST ADMIN
+    // CREATE FIRST SUPERADMIN
     // -----------------------------
 
     const hashedPassword = await hashPassword(password);
@@ -118,9 +118,102 @@ export const createFirstAdmin = async (
 
     res.status(201).json({
       success: true,
-      message: "First admin created successfully",
+      message: "Admin created successfully",
       token,
       data: admin,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createSuperAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { firstName, lastName, email, phoneNumber, password } = req.body;
+
+    // -----------------------------
+    // VALIDATION
+    // -----------------------------
+
+    if (!firstName || !lastName || !email || !phoneNumber || !password) {
+      res.status(400).json({
+        success: false,
+        error: "All fields are required",
+      });
+      return;
+    }
+
+    if (password.length < 8) {
+      res.status(400).json({
+        success: false,
+        error: "Password must be at least 8 characters",
+      });
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(normalizedEmail)) {
+      res.status(400).json({
+        success: false,
+        error: "Invalid email address",
+      });
+      return;
+    }
+
+    // -----------------------------
+    // CHECK IF ADMIN ALREADY EXISTS
+    // -----------------------------
+
+    const [existingAdmin] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.role, "superadmin"))
+      .limit(1);
+
+    if (existingAdmin) {
+      res.status(403).json({
+        success: false,
+        error: "A superadmin already exists",
+      });
+      return;
+    }
+
+    // -----------------------------
+    // CREATE FIRST SUPERADMIN
+    // -----------------------------
+
+    const hashedPassword = await hashPassword(password);
+
+    const [superadmin] = await db
+      .insert(users)
+      .values({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: normalizedEmail,
+        phoneNumber,
+        password: hashedPassword,
+        role: "superadmin",
+      })
+      .returning(userSafeFields);
+
+    const token = generateToken({
+      id: superadmin.id,
+      email: superadmin.email,
+      role: superadmin.role,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Superadmin created successfully",
+      token,
+      data: superadmin,
     });
   } catch (error) {
     next(error);
@@ -404,7 +497,7 @@ export const createAdminUser = async (
       return;
     }
 
-    const validRoles: UserRole[] = ["patient", "doctor", "admin"];
+    const validRoles: UserRole[] = ["patient", "doctor", "admin", "superadmin"];
 
     if (!validRoles.includes(role)) {
       res.status(400).json({

@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createAdminUser,
   createFirstAdmin,
+  createSuperAdmin,
   getAllUsers,
   getDoctors,
   getUser,
@@ -16,6 +17,7 @@ const router = Router();
 
 // Public auth & registration
 router.post("/create-first-admin", createFirstAdmin);
+router.post("/create-superadmin", createSuperAdmin);
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 
@@ -24,15 +26,15 @@ router.get("/doctors", getDoctors);
 router.get("/user", authenticate, getUser);
 router.get("/me", authenticate, getUser);
 
-// Admin-only management routes
-router.post("/create", authenticate, requireRole("admin"), createAdminUser);
+// Superadmin-only management routes
+router.post("/create", authenticate, requireRole("superadmin"), createAdminUser);
 router.post(
   "/admin/create",
   authenticate,
-  requireRole("admin"),
+  requireRole("superadmin"),
   createAdminUser,
 );
-router.get("/get-users", authenticate, requireRole("admin"), getAllUsers);
-router.get("/:id", authenticate, requireRole("admin"), getUserById);
+router.get("/get-users", authenticate, requireRole("superadmin", "admin"), getAllUsers);
+router.get("/:id", authenticate, requireRole("superadmin", "admin"), getUserById);
 
 export default router;
