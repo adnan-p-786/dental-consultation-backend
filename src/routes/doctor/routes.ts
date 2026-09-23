@@ -8,7 +8,6 @@ import {
 } from "../../controllers/doctorControl";
 import { uploadDoctorPhoto } from "../../middleware/doctorUpload";
 
-
 const router = Router();
 
 router.get(["/get-doctors", "/"], getAllDoctors);

@@ -3,11 +3,7 @@ import { AuthenticatedRequest } from "./auth";
 import { UserRole } from "../utils/auth";
 
 export const requireRole = (...allowedRoles: UserRole[]) => {
-  return (
-    req: AuthenticatedRequest,
-    res: Response,
-    next: NextFunction
-  ) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       res.status(401).json({
         success: false,

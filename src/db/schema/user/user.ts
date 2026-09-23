@@ -1,4 +1,10 @@
-import {pgTable,serial,varchar,timestamp,pgEnum,} from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  varchar,
+  timestamp,
+  pgEnum,
+} from "drizzle-orm/pg-core";
 
 export const userRole = pgEnum("user_role", ["patient", "doctor", "admin"]);
 

@@ -16,24 +16,20 @@ if (!JWT_SECRET) {
 }
 
 // Hash password
-export const hashPassword = async (
-  password: string
-): Promise<string> => {
+export const hashPassword = async (password: string): Promise<string> => {
   return await bcrypt.hash(password, 10);
 };
 
 // Compare password
 export const comparePassword = async (
   password: string,
-  hashedPassword: string
+  hashedPassword: string,
 ): Promise<boolean> => {
   return await bcrypt.compare(password, hashedPassword);
 };
 
 // Generate JWT
-export const generateToken = (
-  payload: TokenPayload
-): string => {
+export const generateToken = (payload: TokenPayload): string => {
   if (!JWT_SECRET) {
     throw new Error("JWT_SECRET is not configured");
   }
@@ -44,9 +40,7 @@ export const generateToken = (
 };
 
 // Verify JWT
-export const verifyToken = (
-  token: string
-): TokenPayload => {
+export const verifyToken = (token: string): TokenPayload => {
   if (!JWT_SECRET) {
     throw new Error("JWT_SECRET is not configured");
   }

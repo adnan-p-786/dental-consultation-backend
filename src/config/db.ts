@@ -15,14 +15,15 @@ export const pool = new Pool(
         database: process.env.DB_NAME || "dentalClinic",
         password: process.env.DB_PASSWORD || "superuser",
         port: Number(process.env.DB_PORT) || 5432,
-      }
+      },
 );
 
 // Verify initial connection
-pool.connect()
+pool
+  .connect()
   .then((client) => {
     console.log("Connected to PostgreSQL database successfully");
-    console.log("DB port:", process.env.DB_PORT);
+    console.log("DB port:", process.env.PORT);
     client.release();
   })
   .catch((err) => console.error("PostgreSQL connection error:", err.message));
@@ -33,7 +34,7 @@ export const db = drizzle(pool, { schema });
 // Helper for executing typed queries
 export const query = <T extends QueryResultRow = any>(
   text: string,
-  params?: any[]
+  params?: any[],
 ): Promise<QueryResult<T>> => {
   return pool.query<T>(text, params);
 };

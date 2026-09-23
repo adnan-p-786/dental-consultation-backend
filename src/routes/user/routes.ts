@@ -26,7 +26,12 @@ router.get("/me", authenticate, getUser);
 
 // Admin-only management routes
 router.post("/create", authenticate, requireRole("admin"), createAdminUser);
-router.post("/admin/create", authenticate, requireRole("admin"), createAdminUser);
+router.post(
+  "/admin/create",
+  authenticate,
+  requireRole("admin"),
+  createAdminUser,
+);
 router.get("/get-users", authenticate, requireRole("admin"), getAllUsers);
 router.get("/:id", authenticate, requireRole("admin"), getUserById);
 
