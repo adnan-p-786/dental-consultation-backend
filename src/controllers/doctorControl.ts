@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { eq } from "drizzle-orm";
 import db from "../db";
 import { doctor } from "../db/schema/doctor/doctor";
+import { comparePassword, generateToken } from "../utils/auth";
 
 // GET all doctors
 export const getAllDoctors = async (
@@ -31,6 +32,7 @@ export const addDoctor = async (
     const {
       doctorName,
       doctorEmail,
+      doctorPassword,
       phoneNumber,
       specialization,
       workingHours,
@@ -96,6 +98,13 @@ export const addDoctor = async (
       });
     }
 
+    if (!doctorPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Doctor password is required",
+      });
+    }
+
     if (!finalPhone) {
       return res.status(400).json({
         success: false,
@@ -122,6 +131,7 @@ export const addDoctor = async (
       .values({
         doctorName: finalName,
         doctorEmail: finalEmail,
+        doctorPassword: doctorPassword,
         phoneNumber: finalPhone,
         specialization: finalSpecialization,
         workingHours: finalWorkingHours,
@@ -190,6 +200,7 @@ export const updateDoctor = async (
     const {
       doctorName,
       doctorEmail,
+      doctorPassword,
       phoneNumber,
       specialization,
       workingHours,
@@ -214,6 +225,9 @@ export const updateDoctor = async (
       )
         .trim()
         .toLowerCase();
+    }
+    if (doctorPassword || req.body.password) {
+      updateData.doctorPassword = (doctorPassword || req.body.password).trim();
     }
     if (phoneNumber || req.body.phone || req.body.phone_number) {
       updateData.phoneNumber = (
@@ -290,6 +304,98 @@ export const updateDoctorStatus = async (
       success: true,
       message: "Doctor status updated successfully",
       data: updatedDoctor,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// LOGIN doctor
+export const loginDoctor = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "Doctor email and password are required",
+        message: "Doctor email and password are required",
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Query doctor by email
+    const [doc] = await db
+      .select()
+      .from(doctor)
+      .where(eq(doctor.doctorEmail, normalizedEmail));
+
+    if (!doc) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid email or password",
+        message: "Invalid email or password",
+      });
+    }
+
+    // Verify password (supports bcrypt hash and plain text fallback)
+    let isPasswordValid = false;
+    if (doc.doctorPassword) {
+      try {
+        isPasswordValid = await comparePassword(password, doc.doctorPassword);
+      } catch {
+        // Plain text fallback
+      }
+      if (!isPasswordValid) {
+        isPasswordValid = password === doc.doctorPassword;
+      }
+    }
+
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid email or password",
+        message: "Invalid email or password",
+      });
+    }
+
+    // Generate JWT token with default role 'doctor'
+    const token = generateToken({
+      id: doc.id,
+      email: doc.doctorEmail,
+      role: "doctor",
+    });
+
+    const cleanName = doc.doctorName.replace(/^Dr\.\s*/i, "").trim();
+    const nameParts = cleanName.split(" ");
+    const firstName = nameParts[0] || doc.doctorName;
+    const lastName = nameParts.slice(1).join(" ") || "";
+
+    const doctorData = {
+      id: doc.id,
+      name: doc.doctorName,
+      firstName,
+      lastName,
+      email: doc.doctorEmail,
+      phoneNumber: doc.phoneNumber,
+      specialization: doc.specialization,
+      workingHours: doc.workingHours,
+      status: doc.status,
+      avatar: doc.doctorPhoto,
+      role: "doctor" as const,
+      createdAt: doc.createdAt,
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: "Doctor login successful",
+      token,
+      data: doctorData,
     });
   } catch (error) {
     next(error);

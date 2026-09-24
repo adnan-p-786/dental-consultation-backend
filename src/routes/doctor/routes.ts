@@ -5,6 +5,7 @@ import {
   getAllDoctors,
   updateDoctor,
   updateDoctorStatus,
+  loginDoctor,
 } from "../../controllers/doctorControl";
 import { uploadDoctorPhoto } from "../../middleware/doctorUpload";
 
@@ -12,6 +13,7 @@ const router = Router();
 
 router.get(["/get-doctors", "/"], getAllDoctors);
 router.post(["/add-doctor", "/"], uploadDoctorPhoto, addDoctor);
+router.post("/login", loginDoctor);
 router.delete(["/delete-doctor/:id", "/:id"], deleteDoctor);
 router.put(["/update-doctor/:id", "/:id"], uploadDoctorPhoto, updateDoctor);
 router.patch(["/update-status/:id", "/:id/status"], updateDoctorStatus);

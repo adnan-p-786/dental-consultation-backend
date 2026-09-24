@@ -7,6 +7,7 @@ export const doctor = pgTable("doctor", {
   phoneNumber: varchar("phone_number", { length: 50 }).notNull(),
   specialization: varchar("specialization", { length: 255 }).notNull(),
   doctorEmail: varchar("doctor_email", { length: 255 }).notNull(),
+  doctorPassword: varchar("doctor_password", { length: 255 }).notNull().default(""),
   doctorPhoto: varchar("doctor_photo", { length: 500 }).notNull(),
   workingHours:varchar("working_hours", { length: 255 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),

@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 
 import { db } from "../config/db";
 import { users } from "../db/schema/user/user";
+import { doctor } from "../db/schema/doctor/doctor";
 
 import { eq } from "drizzle-orm";
 
@@ -559,17 +560,79 @@ export const loginUser = async (
   try {
     const { email, password, role } = req.body;
 
-    if (!email || !password || !role) {
+    if (!email || !password) {
       res.status(400).json({
         success: false,
-        error: "Email, password, and role are required",
+        error: "Email and password are required",
       });
       return;
     }
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Find user
+    // Check doctor table if role is doctor
+    if (role && role.toLowerCase() === "doctor") {
+      const [doc] = await db
+        .select()
+        .from(doctor)
+        .where(eq(doctor.doctorEmail, normalizedEmail));
+
+      if (doc) {
+        let isPasswordValid = false;
+        if (doc.doctorPassword) {
+          try {
+            isPasswordValid = await comparePassword(password, doc.doctorPassword);
+          } catch {
+            // Not a bcrypt hash
+          }
+          if (!isPasswordValid) {
+            isPasswordValid = password === doc.doctorPassword;
+          }
+        }
+
+        if (!isPasswordValid) {
+          res.status(401).json({
+            success: false,
+            error: "Invalid email or password",
+          });
+          return;
+        }
+
+        const token = generateToken({
+          id: doc.id,
+          email: doc.doctorEmail,
+          role: "doctor",
+        });
+
+        const cleanName = doc.doctorName.replace(/^Dr\.\s*/i, "").trim();
+        const nameParts = cleanName.split(" ");
+        const firstName = nameParts[0] || doc.doctorName;
+        const lastName = nameParts.slice(1).join(" ") || "";
+
+        res.json({
+          success: true,
+          message: "Login successful",
+          token,
+          data: {
+            id: doc.id,
+            name: doc.doctorName,
+            firstName,
+            lastName,
+            email: doc.doctorEmail,
+            phoneNumber: doc.phoneNumber,
+            role: "doctor",
+            specialization: doc.specialization,
+            workingHours: doc.workingHours,
+            status: doc.status,
+            avatar: doc.doctorPhoto,
+            createdAt: doc.createdAt,
+          },
+        });
+        return;
+      }
+    }
+
+    // Find user in users table
     const [user] = await db
       .select()
       .from(users)
@@ -600,7 +663,7 @@ export const loginUser = async (
         user.role.charAt(0).toUpperCase() + user.role.slice(1);
       res.status(403).json({
         success: false,
-        error: error,
+        error: `Role mismatch: This account has the role "${capitalizedRole}", not "${role}".`,
       });
       return;
     }
