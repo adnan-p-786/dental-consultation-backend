@@ -3,6 +3,8 @@ import {
   cancelAppointment,
   createAppointment,
   getAllAppointment,
+  updateAppointment,
+  deleteAppointment,
 } from "../../controllers/appointmentControl";
 import { upload } from "../../middleware/upload";
 
@@ -18,12 +20,24 @@ router.post(
   createAppointment
 );
 router.patch(
-  ["/cancel-appointment/:id", "/update-appointment/:id"],
+  "/update-appointment/:id",
+  updateAppointment
+);
+router.put(
+  "/update-appointment/:id",
+  updateAppointment
+);
+router.patch(
+  "/cancel-appointment/:id",
   cancelAppointment
 );
 router.put(
-  ["/cancel-appointment/:id", "/update-appointment/:id"],
+  "/cancel-appointment/:id",
   cancelAppointment
+);
+router.delete(
+  ["/delete-appointment/:id", "/:id"],
+  deleteAppointment
 );
 
 export default router;

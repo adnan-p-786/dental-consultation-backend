@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from "express";
 import { db } from "../config/db";
 import { appointments } from "../db/schema/appointmentBooking/appointment";
 import { sendAppointmentAcknowledgment } from "../services/emailService";
-import { eq, desc, ilike } from "drizzle-orm";
+import { eq, desc, ilike, or } from "drizzle-orm";
 
 
 export const createAppointment = async (
@@ -155,16 +155,46 @@ export const createAppointment = async (
 export const getAllAppointment = async (req: Request, res: Response, next: NextFunction) =>{
     try {
       const email =
-        typeof req.query.email === "string"
+        typeof req.query.email === "string" && req.query.email.trim()
           ? req.query.email.trim().toLowerCase()
           : null;
 
-      let allAppointments;
+      const phone =
+        typeof req.query.phone === "string" && req.query.phone.trim()
+          ? req.query.phone.trim()
+          : null;
+
+      const name =
+        typeof req.query.name === "string" && req.query.name.trim()
+          ? req.query.name.trim()
+          : null;
+
+      const conditions = [];
+
       if (email) {
+        conditions.push(ilike(appointments.patientEmail, email));
+      }
+
+      if (phone) {
+        const cleanPhone = phone.replace(/\D/g, "");
+        if (cleanPhone.length >= 7) {
+          const lastDigits = cleanPhone.slice(-10);
+          conditions.push(ilike(appointments.phoneNumber, `%${lastDigits}%`));
+        } else {
+          conditions.push(ilike(appointments.phoneNumber, `%${phone}%`));
+        }
+      }
+
+      if (name && name.length >= 3) {
+        conditions.push(ilike(appointments.patientName, `%${name}%`));
+      }
+
+      let allAppointments;
+      if (conditions.length > 0) {
         allAppointments = await db
           .select()
           .from(appointments)
-          .where(ilike(appointments.patientEmail, email))
+          .where(or(...conditions))
           .orderBy(desc(appointments.id));
       } else {
         allAppointments = await db
@@ -216,3 +246,111 @@ export const cancelAppointment = async (req: Request, res: Response, next: NextF
       next(error);
     }
   };
+
+export const updateAppointment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const numId = Number(id);
+
+    if (isNaN(numId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid appointment ID",
+      });
+    }
+
+    const {
+      status,
+      patientName,
+      patientEmail,
+      phoneNumber,
+      contactMethod,
+      tratmentType,
+      preferredDate,
+      preferredTime,
+      additionalDescription,
+    } = req.body || {};
+
+    const updateFields: Record<string, any> = {};
+
+    if (status !== undefined) updateFields.status = String(status).toLowerCase();
+    if (patientName !== undefined) updateFields.patientName = patientName;
+    if (patientEmail !== undefined) updateFields.patientEmail = patientEmail;
+    if (phoneNumber !== undefined) updateFields.phoneNumber = phoneNumber;
+    if (contactMethod !== undefined) updateFields.contactMethod = contactMethod;
+    if (tratmentType !== undefined) updateFields.tratmentType = tratmentType;
+    if (preferredDate !== undefined) updateFields.preferredDate = preferredDate;
+    if (preferredTime !== undefined) updateFields.preferredTime = preferredTime;
+    if (additionalDescription !== undefined) updateFields.additionalDescription = additionalDescription;
+
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No fields provided to update",
+      });
+    }
+
+    const [updated] = await db
+      .update(appointments)
+      .set(updateFields)
+      .where(eq(appointments.id, numId))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Appointment updated successfully",
+      data: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteAppointment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const numId = Number(id);
+
+    if (isNaN(numId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid appointment ID",
+      });
+    }
+
+    const [deleted] = await db
+      .delete(appointments)
+      .where(eq(appointments.id, numId))
+      .returning();
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Appointment deleted successfully",
+      data: deleted,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

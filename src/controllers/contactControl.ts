@@ -43,7 +43,6 @@ export const createContact = async (req: Request,res: Response,next: NextFunctio
         });
         return res.json({
             success: true,
-            toast: "Message sent successfully",
             data: newContact,
         });
     } catch (error) {
