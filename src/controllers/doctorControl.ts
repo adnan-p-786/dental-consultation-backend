@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { eq } from "drizzle-orm";
 import db from "../db";
-import { doctor } from "../db/schema/doctor/doctor";
+import { doctor } from "../db/schema/doctor";
 import { comparePassword, generateToken } from "../utils/auth";
 
 // GET all doctors

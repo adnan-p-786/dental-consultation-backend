@@ -9,7 +9,7 @@ import {
   getUserById,
   loginUser,
   registerUser,
-} from "../../controllers/adminConrtol";
+} from "../../controllers/userConrtol";
 import { authenticate } from "../../middleware/auth";
 import { requireRole } from "../../middleware/role";
 

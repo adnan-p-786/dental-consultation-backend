@@ -1,8 +1,8 @@
 import { Router, Request, Response, NextFunction } from "express";
 
 import { db } from "../config/db";
-import { users } from "../db/schema/user/user";
-import { doctor } from "../db/schema/doctor/doctor";
+import { users } from "../db/schema/user";
+import { doctor } from "../db/schema/doctor";
 
 import { eq } from "drizzle-orm";
 
@@ -581,7 +581,10 @@ export const loginUser = async (
         let isPasswordValid = false;
         if (doc.doctorPassword) {
           try {
-            isPasswordValid = await comparePassword(password, doc.doctorPassword);
+            isPasswordValid = await comparePassword(
+              password,
+              doc.doctorPassword,
+            );
           } catch {
             // Not a bcrypt hash
           }

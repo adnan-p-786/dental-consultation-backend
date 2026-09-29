@@ -6,6 +6,7 @@ import usersRouter from "./routes/user/routes";
 import appointmentRoutes from "./routes/appointment/routes";
 import doctorRoutes from "./routes/doctor/routes";
 import contactRoutes from "./routes/contact/routes";
+import treatmentRoutes from "./routes/treatment/routes";
 
 const app = express();
 
@@ -32,6 +33,8 @@ app.use("/api/users", usersRouter);
 app.use("/api/appointment", appointmentRoutes);
 app.use("/api/doctor", doctorRoutes);
 app.use("/api/contact", contactRoutes);
+app.use("/api/treatment", treatmentRoutes);
+app.use("/api/treatments", treatmentRoutes);
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Error handler

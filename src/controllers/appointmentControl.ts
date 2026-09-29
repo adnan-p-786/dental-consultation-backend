@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 
 import { db } from "../config/db";
-import { appointments } from "../db/schema/appointmentBooking/appointment";
+import { appointments } from "../db/schema/appointment";
 import {
   sendAppointmentAcknowledgment,
   sendProposedScheduleNotification,
@@ -642,5 +642,3 @@ export const updateReminderSettings = async (
     next(error);
   }
 };
-
-

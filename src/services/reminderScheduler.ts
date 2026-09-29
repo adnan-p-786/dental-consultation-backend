@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { eq } from "drizzle-orm";
 import { db } from "../config/db";
-import { appointments } from "../db/schema/appointmentBooking/appointment";
+import { appointments } from "../db/schema/appointment";
 import { sendAppointmentReminderNotification } from "./emailService";
 
 export interface ReminderSchedulerConfig {
@@ -259,7 +259,10 @@ export const checkAndSendAutomaticReminders = async (): Promise<{
 
     return { checkedCount: approvedApts.length, remindersSent };
   } catch (err) {
-    console.error("[Auto-Reminder Scheduler] Error running reminder scan:", err);
+    console.error(
+      "[Auto-Reminder Scheduler] Error running reminder scan:",
+      err,
+    );
     return { checkedCount: 0, remindersSent: 0 };
   }
 };
