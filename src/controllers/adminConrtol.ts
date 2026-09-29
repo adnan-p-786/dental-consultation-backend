@@ -658,14 +658,22 @@ export const loginUser = async (
     }
 
     // Check role mismatch
-    if (role && user.role.toLowerCase() !== role.toLowerCase()) {
-      const capitalizedRole =
-        user.role.charAt(0).toUpperCase() + user.role.slice(1);
-      res.status(403).json({
-        success: false,
-        error: `Role mismatch: This account has the role "${capitalizedRole}", not "${role}".`,
-      });
-      return;
+    if (role) {
+      const requestedRole = role.toLowerCase();
+      const userRole = user.role.toLowerCase();
+      const isAdminTypeMatch =
+        (requestedRole === "admin" || requestedRole === "superadmin") &&
+        (userRole === "admin" || userRole === "superadmin");
+
+      if (userRole !== requestedRole && !isAdminTypeMatch) {
+        const capitalizedRole =
+          user.role.charAt(0).toUpperCase() + user.role.slice(1);
+        res.status(403).json({
+          success: false,
+          error: `Role mismatch: This account has the role "${capitalizedRole}", not "${role}".`,
+        });
+        return;
+      }
     }
 
     // Generate token

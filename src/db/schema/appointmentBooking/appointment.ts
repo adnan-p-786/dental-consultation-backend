@@ -1,4 +1,11 @@
-import { pgTable, serial, varchar, timestamp, text, date } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  varchar,
+  timestamp,
+  text,
+  date,
+} from "drizzle-orm/pg-core";
 
 export const appointments = pgTable("appointments", {
   id: serial("id").primaryKey(),
@@ -10,7 +17,7 @@ export const appointments = pgTable("appointments", {
   preferredDate: date("preferred_date").notNull(),
   preferredTime: varchar("preferred_time", { length: 50 }),
   additionalDescription: text("additional_description"),
-  supportingDocument:varchar("supporting_document", { length: 500 }),
+  supportingDocument: varchar("supporting_document", { length: 500 }),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
 });
