@@ -2,11 +2,13 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 
-import usersRouter from "./routes/user/routes";
-import appointmentRoutes from "./routes/appointment/routes";
-import doctorRoutes from "./routes/doctor/routes";
-import contactRoutes from "./routes/contact/routes";
-import treatmentRoutes from "./routes/treatment/routes";
+import usersRouter from "./routes/user.routes";
+import appointmentRoutes from "./routes/appointment.routes";
+import doctorRoutes from "./routes/doctor.routes";
+import treatmentRoutes from "./routes/treatment.routes";
+import consultationRoutes from "./routes/consultation.routes";
+import settingsRoutes from "./routes/settings.routes";
+import reportRoutes from "./routes/report.routes";
 
 const app = express();
 
@@ -31,11 +33,17 @@ app.get("/", (_req, res) => {
 // Routes
 app.use("/api/users", usersRouter);
 app.use("/api/appointment", appointmentRoutes);
+app.use("/api/appointments", appointmentRoutes);
 app.use("/api/doctor", doctorRoutes);
-app.use("/api/contact", contactRoutes);
+app.use("/api/doctors", doctorRoutes);
 app.use("/api/treatment", treatmentRoutes);
 app.use("/api/treatments", treatmentRoutes);
+app.use("/api/consultation", consultationRoutes);
+app.use("/api/consultations", consultationRoutes);
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use("/api/settings", settingsRoutes);
+app.use("/api/reports", reportRoutes);
+app.use("/api/report", reportRoutes);
 
 // Error handler
 app.use(

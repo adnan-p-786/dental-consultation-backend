@@ -5,6 +5,7 @@ import {
   timestamp,
   text,
   date,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 export const appointments = pgTable("appointments", {
@@ -19,6 +20,13 @@ export const appointments = pgTable("appointments", {
   additionalDescription: text("additional_description"),
   supportingDocument: varchar("supporting_document", { length: 500 }),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
+  assignedDoctorId: varchar("assigned_doctor_id", { length: 100 }),
+  assignedDoctorName: varchar("assigned_doctor_name", { length: 255 }),
+  meetingLink: varchar("meeting_link", { length: 500 }),
+  meetingPlatform: varchar("meeting_platform", { length: 50 }),
+  confirmedDate: date("confirmed_date"),
+  confirmedTime: varchar("confirmed_time", { length: 50 }),
+  consultationNotes: jsonb("consultation_notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

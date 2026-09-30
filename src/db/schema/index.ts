@@ -3,3 +3,6 @@ export * from "./contact";
 export * from "./doctor";
 export * from "./user";
 export * from "./treatment";
+export * from "./consultation";
+export * from "./settings";
+export * from "./report";

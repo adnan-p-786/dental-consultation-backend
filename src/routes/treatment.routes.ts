@@ -7,7 +7,7 @@ import {
   updateTreatment,
   toggleTreatmentStatus,
   deleteTreatment,
-} from "../../controllers/treatmentControl";
+} from "../controllers/treatmentController";
 
 const router = Router();
 
@@ -27,7 +27,10 @@ router.post(["/add-treatment", "/create-treatment", "/"], addTreatment);
 router.put(["/update-treatment/:id", "/:id"], updateTreatment);
 
 // PATCH toggle active status
-router.patch(["/toggle-status/:id", "/update-status/:id", "/:id/status"], toggleTreatmentStatus);
+router.patch(
+  ["/toggle-status/:id", "/update-status/:id", "/:id/status"],
+  toggleTreatmentStatus,
+);
 
 // DELETE treatment
 router.delete(["/delete-treatment/:id", "/:id"], deleteTreatment);

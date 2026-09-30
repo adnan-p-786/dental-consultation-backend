@@ -12,7 +12,14 @@ export const requireRole = (...allowedRoles: UserRole[]) => {
       return;
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const userRole = (req.user.role || "").toLowerCase() as UserRole;
+    const normalizedAllowed = allowedRoles.map((r) => r.toLowerCase() as UserRole);
+
+    const hasPermission =
+      normalizedAllowed.includes(userRole) ||
+      (userRole === "superadmin" && normalizedAllowed.includes("admin"));
+
+    if (!hasPermission) {
       res.status(403).json({
         success: false,
         error: "Access denied",

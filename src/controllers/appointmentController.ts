@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from "express";
 
 import { db } from "../config/db";
 import { appointments } from "../db/schema/appointment";
+import { consultations } from "../db/schema/consultation";
+import { doctor } from "../db/schema/doctor";
+import { users } from "../db/schema/user";
 import {
   sendAppointmentAcknowledgment,
   sendProposedScheduleNotification,
@@ -202,19 +205,56 @@ export const getAllAppointment = async (
       conditions.push(ilike(appointments.patientName, `%${name}%`));
     }
 
-    let allAppointments;
+    let rows;
     if (conditions.length > 0) {
-      allAppointments = await db
-        .select()
+      rows = await db
+        .select({
+          appointment: appointments,
+          consultation: consultations,
+        })
         .from(appointments)
+        .leftJoin(
+          consultations,
+          eq(appointments.id, consultations.appointmentId),
+        )
         .where(or(...conditions))
         .orderBy(desc(appointments.id));
     } else {
-      allAppointments = await db
-        .select()
+      rows = await db
+        .select({
+          appointment: appointments,
+          consultation: consultations,
+        })
         .from(appointments)
+        .leftJoin(
+          consultations,
+          eq(appointments.id, consultations.appointmentId),
+        )
         .orderBy(desc(appointments.id));
     }
+
+    const doctorsList = await db.select().from(doctor);
+    const doctorById = new Map<string, (typeof doctor.$inferSelect)>();
+    const doctorByName = new Map<string, (typeof doctor.$inferSelect)>();
+    doctorsList.forEach((d) => {
+      doctorById.set(String(d.id), d);
+      doctorByName.set(d.doctorName.toLowerCase().trim(), d);
+    });
+
+    const allAppointments = rows.map((r) => {
+      const docId = r.appointment.assignedDoctorId;
+      const docName = r.appointment.assignedDoctorName;
+      const matchedDoc =
+        (docId ? doctorById.get(String(docId)) : undefined) ||
+        (docName ? doctorByName.get(docName.toLowerCase().trim()) : undefined);
+
+      return {
+        ...r.appointment,
+        assignedDoctorPhoto: matchedDoc?.doctorPhoto || null,
+        assignedDoctorSpecialization: matchedDoc?.specialization || null,
+        consultation: r.consultation || null,
+      };
+    });
 
     res.json({
       success: true,
@@ -321,11 +361,25 @@ export const updateAppointment = async (
       tratmentType,
       preferredDate,
       preferredTime,
+      confirmedDate,
+      confirmedTime,
       additionalDescription,
       note,
+      assignedDoctorId,
       assignedDoctorName,
       meetingLink,
+      meetingPlatform,
+      consultationNotes,
     } = req.body || {};
+
+    const cleanDate = (d: any) => {
+      if (!d) return undefined;
+      if (typeof d === "string") {
+        if (d.includes("T")) return d.split("T")[0];
+        return d.trim();
+      }
+      return d;
+    };
 
     const updateFields: Record<string, any> = {};
 
@@ -336,10 +390,54 @@ export const updateAppointment = async (
     if (phoneNumber !== undefined) updateFields.phoneNumber = phoneNumber;
     if (contactMethod !== undefined) updateFields.contactMethod = contactMethod;
     if (tratmentType !== undefined) updateFields.tratmentType = tratmentType;
-    if (preferredDate !== undefined) updateFields.preferredDate = preferredDate;
+    if (preferredDate !== undefined) updateFields.preferredDate = cleanDate(preferredDate);
     if (preferredTime !== undefined) updateFields.preferredTime = preferredTime;
+    if (confirmedDate !== undefined) updateFields.confirmedDate = cleanDate(confirmedDate);
+    else if (preferredDate !== undefined) updateFields.confirmedDate = cleanDate(preferredDate);
+    if (confirmedTime !== undefined) updateFields.confirmedTime = confirmedTime;
+    else if (preferredTime !== undefined) updateFields.confirmedTime = preferredTime;
     if (additionalDescription !== undefined)
       updateFields.additionalDescription = additionalDescription;
+
+    if (assignedDoctorId !== undefined) {
+      updateFields.assignedDoctorId = String(assignedDoctorId);
+      if (!assignedDoctorName) {
+        try {
+          const idStr = String(assignedDoctorId);
+          if (idStr.startsWith("user-")) {
+            const uId = Number(idStr.replace("user-", ""));
+            const [u] = await db.select().from(users).where(eq(users.id, uId));
+            if (u) {
+              updateFields.assignedDoctorName = `Dr. ${u.firstName} ${u.lastName || ""}`.trim();
+            }
+          } else if (!isNaN(Number(idStr))) {
+            const [d] = await db.select().from(doctor).where(eq(doctor.id, Number(idStr)));
+            if (d) {
+              updateFields.assignedDoctorName = d.doctorName;
+            }
+          }
+        } catch (lookupErr) {
+          console.warn("Could not look up doctor name:", lookupErr);
+        }
+      }
+    }
+    if (assignedDoctorName !== undefined) {
+      updateFields.assignedDoctorName = assignedDoctorName;
+    }
+
+    if (meetingLink !== undefined) {
+      updateFields.meetingLink = meetingLink;
+      if (!meetingPlatform && meetingLink) {
+        if (meetingLink.includes("meet.google.com")) updateFields.meetingPlatform = "google_meet";
+        else if (meetingLink.includes("zoom.us")) updateFields.meetingPlatform = "zoom";
+        else if (meetingLink.includes("teams.microsoft.com")) updateFields.meetingPlatform = "teams";
+      }
+    }
+    if (meetingPlatform !== undefined) {
+      updateFields.meetingPlatform = meetingPlatform;
+    }
+    if (consultationNotes !== undefined)
+      updateFields.consultationNotes = consultationNotes;
 
     if (Object.keys(updateFields).length === 0) {
       return res.status(400).json({
@@ -371,13 +469,13 @@ export const updateAppointment = async (
             updated.patientName,
             {
               id: updated.id,
-              preferredDate: updated.preferredDate,
-              preferredTime: updated.preferredTime,
+              preferredDate: updated.confirmedDate || updated.preferredDate,
+              preferredTime: updated.confirmedTime || updated.preferredTime,
               tratmentType: updated.tratmentType,
               contactMethod: updated.contactMethod,
               note: note || undefined,
-              assignedDoctorName: assignedDoctorName || undefined,
-              meetingLink: meetingLink || undefined,
+              assignedDoctorName: updated.assignedDoctorName || undefined,
+              meetingLink: updated.meetingLink || undefined,
             },
           );
           emailSent = true;
@@ -397,13 +495,13 @@ export const updateAppointment = async (
             updated.patientName,
             {
               id: updated.id,
-              preferredDate: updated.preferredDate,
-              preferredTime: updated.preferredTime,
+              preferredDate: updated.confirmedDate || updated.preferredDate,
+              preferredTime: updated.confirmedTime || updated.preferredTime,
               tratmentType: updated.tratmentType,
               contactMethod: updated.contactMethod,
               note: note || undefined,
-              assignedDoctorName: assignedDoctorName || undefined,
-              meetingLink: meetingLink || undefined,
+              assignedDoctorName: updated.assignedDoctorName || undefined,
+              meetingLink: updated.meetingLink || undefined,
             },
           );
           emailSent = true;
@@ -423,12 +521,12 @@ export const updateAppointment = async (
             updated.patientName,
             {
               id: updated.id,
-              preferredDate: updated.preferredDate,
-              preferredTime: updated.preferredTime,
+              preferredDate: updated.confirmedDate || updated.preferredDate,
+              preferredTime: updated.confirmedTime || updated.preferredTime,
               tratmentType: updated.tratmentType,
               contactMethod: updated.contactMethod,
               note: note || "Appointment cancelled by clinic administration.",
-              assignedDoctorName: assignedDoctorName || undefined,
+              assignedDoctorName: updated.assignedDoctorName || undefined,
             },
           );
           emailSent = true;

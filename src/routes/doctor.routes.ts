@@ -6,11 +6,15 @@ import {
   updateDoctor,
   updateDoctorStatus,
   loginDoctor,
-} from "../../controllers/doctorControl";
-import { uploadDoctorPhoto } from "../../middleware/doctorUpload";
+} from "../controllers/doctorController";
+import { uploadDoctorPhoto } from "../middleware/doctorUpload";
+import { authenticate } from "../middleware/auth";
+import { requireRole } from "../middleware/role";
+import { getDoctorMyConsultations } from "../controllers/consultationController";
 
 const router = Router();
 
+router.get("/me/consultations", authenticate, requireRole("doctor"), getDoctorMyConsultations);
 router.get(["/get-doctors", "/"], getAllDoctors);
 router.post(["/add-doctor", "/"], uploadDoctorPhoto, addDoctor);
 router.post("/login", loginDoctor);

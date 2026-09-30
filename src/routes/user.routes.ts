@@ -9,9 +9,9 @@ import {
   getUserById,
   loginUser,
   registerUser,
-} from "../../controllers/userConrtol";
-import { authenticate } from "../../middleware/auth";
-import { requireRole } from "../../middleware/role";
+} from "../controllers/userConrtoller";
+import { authenticate } from "../middleware/auth";
+import { requireRole } from "../middleware/role";
 
 const router = Router();
 
@@ -27,14 +27,29 @@ router.get("/user", authenticate, getUser);
 router.get("/me", authenticate, getUser);
 
 // Superadmin-only management routes
-router.post("/create", authenticate, requireRole("superadmin"), createAdminUser);
+router.post(
+  "/create",
+  authenticate,
+  requireRole("superadmin"),
+  createAdminUser,
+);
 router.post(
   "/admin/create",
   authenticate,
   requireRole("superadmin"),
   createAdminUser,
 );
-router.get("/get-users", authenticate, requireRole("superadmin", "admin"), getAllUsers);
-router.get("/:id", authenticate, requireRole("superadmin", "admin"), getUserById);
+router.get(
+  "/get-users",
+  authenticate,
+  requireRole("superadmin", "admin"),
+  getAllUsers,
+);
+router.get(
+  "/:id",
+  authenticate,
+  requireRole("superadmin", "admin"),
+  getUserById,
+);
 
 export default router;
