@@ -6,7 +6,10 @@ import { appointments } from "./appointment";
 export const consultations = pgTable("consultations", {
   id: serial("id").primaryKey(),
 
-  appointmentId: integer("appointment_id").notNull().unique().references(() => appointments.id),
+  appointmentId: integer("appointment_id")
+    .notNull()
+    .unique()
+    .references(() => appointments.id, { onDelete: "cascade" }),
 
   doctorId: integer("doctor_id").notNull().references(() => doctor.id),
 

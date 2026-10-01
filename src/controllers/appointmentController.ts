@@ -686,10 +686,19 @@ export const deleteAppointment = async (
       });
     }
 
-    const [deleted] = await db
-      .delete(appointments)
-      .where(eq(appointments.id, numId))
-      .returning();
+    const deleted = await db.transaction(async (tx) => {
+      // Clean up any linked consultation records first
+      await tx
+        .delete(consultations)
+        .where(eq(consultations.appointmentId, numId));
+
+      const [apt] = await tx
+        .delete(appointments)
+        .where(eq(appointments.id, numId))
+        .returning();
+
+      return apt;
+    });
 
     if (!deleted) {
       return res.status(404).json({
