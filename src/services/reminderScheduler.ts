@@ -3,6 +3,7 @@ import path from "path";
 import { eq } from "drizzle-orm";
 import { db } from "../config/db";
 import { appointments } from "../db/schema/appointment";
+import { settings } from "../db/schema/settings";
 import { sendAppointmentReminderNotification } from "./emailService";
 
 export interface ReminderSchedulerConfig {
@@ -151,7 +152,33 @@ export const checkAndSendAutomaticReminders = async (): Promise<{
   checkedCount: number;
   remindersSent: number;
 }> => {
-  const config = getReminderConfig();
+  let config = getReminderConfig();
+
+  // Dynamically sync with database settings table (configured via Admin Settings)
+  try {
+    const [dbSetting] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.id, 1))
+      .limit(1);
+
+    if (dbSetting) {
+      config = {
+        ...config,
+        enabled: dbSetting.emailEnabled ?? true,
+        instantAckEnabled: dbSetting.instantAckEnabled ?? true,
+        reminder24hEnabled: dbSetting.reminder24hEnabled ?? true,
+        reminder24hHours: dbSetting.reminder24hHours ?? 24,
+        reminder1hEnabled: dbSetting.reminder1hEnabled ?? true,
+        reminder1hMinutes: dbSetting.reminder1hMinutes ?? 60,
+        emailEnabled: dbSetting.emailEnabled ?? true,
+        smsEnabled: dbSetting.smsEnabled ?? false,
+      };
+    }
+  } catch (dbErr) {
+    // Graceful fallback to file/defaults
+  }
+
   if (!config.enabled) {
     return { checkedCount: 0, remindersSent: 0 };
   }
@@ -170,11 +197,13 @@ export const checkAndSendAutomaticReminders = async (): Promise<{
     const urgentHours = (config.reminder1hMinutes || 60) / 60;
 
     for (const apt of approvedApts) {
-      if (!apt.patientEmail || !apt.preferredDate) continue;
+      const scheduledDate = apt.confirmedDate || apt.preferredDate;
+      const scheduledTime = apt.confirmedTime || apt.preferredTime;
+      if (!apt.patientEmail || !scheduledDate) continue;
 
       const consultationDate = parseAppointmentDateTime(
-        apt.preferredDate,
-        apt.preferredTime,
+        scheduledDate,
+        scheduledTime,
       );
       const consultationTime = consultationDate.getTime();
       const msUntil = consultationTime - now;
@@ -183,8 +212,8 @@ export const checkAndSendAutomaticReminders = async (): Promise<{
       // Skip past consultations
       if (hoursUntil <= 0) continue;
 
-      // 1. Advance Reminder (e.g. 24 Hours Prior)
-      // Trigger if within configured advance window (e.g. <= 24 hours and > urgent window)
+      // 1. Advance Reminder (e.g. 24 Hours Prior - Configurable: 48h, 24h, 12h)
+      // Trigger if within configured advance window (e.g. <= advanceHours and > urgentHours)
       const advanceKey = `${apt.id}_adv_${advanceHours}h`;
       if (
         config.reminder24hEnabled &&
@@ -198,10 +227,12 @@ export const checkAndSendAutomaticReminders = async (): Promise<{
             apt.patientName,
             {
               id: apt.id,
-              preferredDate: apt.preferredDate,
-              preferredTime: apt.preferredTime,
+              preferredDate: scheduledDate,
+              preferredTime: scheduledTime,
               tratmentType: apt.tratmentType,
               contactMethod: apt.contactMethod,
+              assignedDoctorName: apt.assignedDoctorName || undefined,
+              meetingLink: apt.meetingLink || undefined,
               reminderType: "24_hour",
               customHours: advanceHours,
             },
@@ -220,8 +251,8 @@ export const checkAndSendAutomaticReminders = async (): Promise<{
         }
       }
 
-      // 2. Urgent Reminder (e.g. 1 Hour Prior)
-      // Trigger if within configured urgent window (e.g. <= 1 hour and > 0)
+      // 2. Urgent Reminder (e.g. 1 Hour Prior - Configurable: 120m, 60m, 30m)
+      // Trigger if within configured urgent window (e.g. <= urgentHours and > 0)
       const urgentKey = `${apt.id}_urg_${Math.round(urgentHours * 60)}m`;
       if (
         config.reminder1hEnabled &&
@@ -235,10 +266,12 @@ export const checkAndSendAutomaticReminders = async (): Promise<{
             apt.patientName,
             {
               id: apt.id,
-              preferredDate: apt.preferredDate,
-              preferredTime: apt.preferredTime,
+              preferredDate: scheduledDate,
+              preferredTime: scheduledTime,
               tratmentType: apt.tratmentType,
               contactMethod: apt.contactMethod,
+              assignedDoctorName: apt.assignedDoctorName || undefined,
+              meetingLink: apt.meetingLink || undefined,
               reminderType: "1_hour",
             },
           );
@@ -246,7 +279,7 @@ export const checkAndSendAutomaticReminders = async (): Promise<{
           saveReminderLogs(logs);
           remindersSent++;
           console.log(
-            `[Auto-Reminder Scheduler] Automatically dispatched urgent 1h reminder to ${apt.patientEmail} for appointment #${apt.id}`,
+            `[Auto-Reminder Scheduler] Automatically dispatched urgent ${Math.round(urgentHours * 60)}m reminder to ${apt.patientEmail} for appointment #${apt.id}`,
           );
         } catch (mailErr) {
           console.error(

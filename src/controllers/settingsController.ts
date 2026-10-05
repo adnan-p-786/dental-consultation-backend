@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../config/db";
 import { settings } from "../db/schema/settings";
 import { AuthenticatedRequest } from "../middleware/auth";
+import { saveReminderConfig } from "../services/reminderScheduler";
 
 // --------------------------------------------------
 // Default settings
@@ -264,6 +265,18 @@ export const updateSettings = async (
       .where(eq(settings.id, current.id))
       .returning();
 
+    if (updated[0]) {
+      saveReminderConfig({
+        instantAckEnabled: updated[0].instantAckEnabled,
+        reminder24hEnabled: updated[0].reminder24hEnabled,
+        reminder24hHours: updated[0].reminder24hHours,
+        reminder1hEnabled: updated[0].reminder1hEnabled,
+        reminder1hMinutes: updated[0].reminder1hMinutes,
+        emailEnabled: updated[0].emailEnabled,
+        smsEnabled: updated[0].smsEnabled,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Settings updated successfully",
@@ -398,6 +411,18 @@ export const updateReminderSettings = async (
       .returning();
 
     const result = updated[0];
+
+    if (result) {
+      saveReminderConfig({
+        instantAckEnabled: result.instantAckEnabled,
+        reminder24hEnabled: result.reminder24hEnabled,
+        reminder24hHours: result.reminder24hHours,
+        reminder1hEnabled: result.reminder1hEnabled,
+        reminder1hMinutes: result.reminder1hMinutes,
+        emailEnabled: result.emailEnabled,
+        smsEnabled: result.smsEnabled,
+      });
+    }
 
     return res.status(200).json({
       success: true,

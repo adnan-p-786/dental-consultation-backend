@@ -1,12 +1,20 @@
-import nodemailer from "nodemailer";
+import nodemailer, { SendMailOptions } from "nodemailer";
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
+const getTransporter = () => {
+  const user = process.env.EMAIL_USER?.trim();
+  const rawPass = process.env.EMAIL_PASSWORD || "";
+  const pass = rawPass.replace(/["'\s]/g, "");
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
+  });
+};
+
+const transporter = {
+  sendMail: (mailOptions: SendMailOptions) => {
+    return getTransporter().sendMail(mailOptions);
   },
-});
+};
 
 export const sendAppointmentAcknowledgment = async (
   patientEmail: string,

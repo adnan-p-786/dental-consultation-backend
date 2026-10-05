@@ -426,15 +426,25 @@ export const updateAppointment = async (
     }
 
     if (meetingLink !== undefined) {
-      updateFields.meetingLink = meetingLink;
-      if (!meetingPlatform && meetingLink) {
-        if (meetingLink.includes("meet.google.com")) updateFields.meetingPlatform = "google_meet";
-        else if (meetingLink.includes("zoom.us")) updateFields.meetingPlatform = "zoom";
-        else if (meetingLink.includes("teams.microsoft.com")) updateFields.meetingPlatform = "teams";
+      const trimmedLink =
+        meetingLink && String(meetingLink).trim()
+          ? String(meetingLink).trim()
+          : null;
+      updateFields.meetingLink = trimmedLink;
+      if (!meetingPlatform && trimmedLink) {
+        if (trimmedLink.includes("meet.google.com"))
+          updateFields.meetingPlatform = "google_meet";
+        else if (trimmedLink.includes("zoom.us"))
+          updateFields.meetingPlatform = "zoom";
+        else if (trimmedLink.includes("teams.microsoft.com"))
+          updateFields.meetingPlatform = "teams";
       }
     }
     if (meetingPlatform !== undefined) {
-      updateFields.meetingPlatform = meetingPlatform;
+      updateFields.meetingPlatform =
+        meetingPlatform && String(meetingPlatform).trim()
+          ? String(meetingPlatform).trim()
+          : null;
     }
     if (consultationNotes !== undefined)
       updateFields.consultationNotes = consultationNotes;

@@ -3,8 +3,10 @@ import { Router, Request, Response, NextFunction } from "express";
 import { db } from "../config/db";
 import { users } from "../db/schema/user";
 import { doctor } from "../db/schema/doctor";
+import { patientProfile } from "../db/schema/patient";
+import { consultations } from "../db/schema/consultation";
 
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 import {
   hashPassword,
@@ -254,9 +256,28 @@ export const getUser = async (
       return;
     }
 
+    let profile: any = null;
+    if (user.role === "patient") {
+      const [p] = await db
+        .select()
+        .from(patientProfile)
+        .where(eq(patientProfile.userId, user.id));
+      profile = p || null;
+    }
+
     res.json({
       success: true,
-      data: user,
+      data: {
+        ...user,
+        ...(profile
+          ? {
+              age: profile.age,
+              gender: profile.gender,
+              address: profile.address,
+              profile,
+            }
+          : {}),
+      },
     });
   } catch (error) {
     next(error);
@@ -374,14 +395,43 @@ export const registerUser = async (
   next: NextFunction,
 ) => {
   try {
-    const { firstName, lastName, email, phoneNumber, password } = req.body;
+    const {
+      firstName,
+      lastName,
+      email,
+      phoneNumber,
+      password,
+      age,
+      gender,
+      address,
+    } = req.body;
 
-    // Required fields
-    if (!firstName || !lastName || !email || !phoneNumber || !password) {
+    // Required fields (all compulsory)
+    if (
+      !firstName ||
+      !lastName ||
+      !email ||
+      !phoneNumber ||
+      !password ||
+      age === undefined ||
+      age === null ||
+      age === "" ||
+      !gender ||
+      !address
+    ) {
       res.status(400).json({
         success: false,
         error:
-          "First name, last name, email, phone number and password are required",
+          "First name, last name, email, phone number, password, age, gender, and residential address are compulsory",
+      });
+      return;
+    }
+
+    const numAge = Number(age);
+    if (isNaN(numAge) || numAge <= 0 || numAge > 120) {
+      res.status(400).json({
+        success: false,
+        error: "Please provide a valid age between 1 and 120",
       });
       return;
     }
@@ -448,6 +498,28 @@ export const registerUser = async (
       })
       .returning(userSafeFields);
 
+    // Automatically initialize linked patientProfile record
+    let createdProfile: any = null;
+    try {
+      const [cp] = await db
+        .insert(patientProfile)
+        .values({
+          userId: newUser.id,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+          email: newUser.email,
+          phoneNumber: newUser.phoneNumber,
+          password: hashedPassword,
+          age: numAge,
+          gender: String(gender).trim(),
+          address: String(address).trim(),
+        })
+        .returning();
+      createdProfile = cp;
+    } catch (profileErr) {
+      console.error("Failed to initialize patientProfile row:", profileErr);
+    }
+
     // Generate token
     const token = generateToken({
       id: newUser.id,
@@ -455,11 +527,21 @@ export const registerUser = async (
       role: newUser.role,
     });
 
+    const safeProfile = createdProfile
+      ? (({ password: _, ...p }) => p)(createdProfile)
+      : undefined;
+
     res.status(201).json({
       success: true,
       message: "Patient registered successfully",
       token,
-      data: newUser,
+      data: {
+        ...newUser,
+        age: createdProfile?.age ?? (req.body.age ? Number(req.body.age) : null),
+        gender: createdProfile?.gender ?? req.body.gender ?? null,
+        address: createdProfile?.address ?? req.body.address ?? null,
+        profile: safeProfile,
+      },
     });
   } catch (error) {
     next(error);
@@ -699,3 +781,248 @@ export const loginUser = async (
     next(error);
   }
 };
+
+// --------------------------------------------------
+// GET PATIENT PROFILE
+// GET /api/users/patient-profile
+// --------------------------------------------------
+export const getPatientProfile = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: "Unauthorized" });
+      return;
+    }
+
+    let [profile] = await db
+      .select()
+      .from(patientProfile)
+      .where(eq(patientProfile.userId, req.user.id));
+
+    // If profile does not exist yet for this user, auto-create one from users table
+    if (!profile) {
+      const [u] = await db.select().from(users).where(eq(users.id, req.user.id));
+      if (u) {
+        const [created] = await db
+          .insert(patientProfile)
+          .values({
+            userId: u.id,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            email: u.email,
+            phoneNumber: u.phoneNumber,
+            password: u.password,
+            age: 0,
+            gender: "unspecified",
+            address: "",
+          })
+          .returning();
+        profile = created;
+      }
+    }
+
+    if (!profile) {
+      res.status(404).json({ success: false, error: "Profile not found" });
+      return;
+    }
+
+    // Do not return password
+    const { password: _p, ...profileSafe } = profile;
+
+    res.json({
+      success: true,
+      data: profileSafe,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// --------------------------------------------------
+// UPDATE PATIENT PROFILE
+// PUT/PATCH /api/users/patient-profile
+// --------------------------------------------------
+export const updatePatientProfile = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: "Unauthorized" });
+      return;
+    }
+
+    const { firstName, lastName, phoneNumber, age, gender, address } = req.body;
+
+    const updateFields: Record<string, any> = {
+      updatedAt: new Date(),
+    };
+
+    if (firstName !== undefined) updateFields.firstName = String(firstName).trim();
+    if (lastName !== undefined) updateFields.lastName = String(lastName).trim();
+    if (phoneNumber !== undefined) updateFields.phoneNumber = String(phoneNumber).trim();
+    if (age !== undefined) updateFields.age = age === "" || age === null ? null : Number(age);
+    if (gender !== undefined) updateFields.gender = String(gender).trim();
+    if (address !== undefined) updateFields.address = String(address).trim();
+
+    // Check if profile exists
+    const [existing] = await db
+      .select()
+      .from(patientProfile)
+      .where(eq(patientProfile.userId, req.user.id));
+
+    let result;
+    if (existing) {
+      const [updated] = await db
+        .update(patientProfile)
+        .set(updateFields)
+        .where(eq(patientProfile.userId, req.user.id))
+        .returning();
+      result = updated;
+    } else {
+      const [u] = await db.select().from(users).where(eq(users.id, req.user.id));
+      const [created] = await db
+        .insert(patientProfile)
+        .values({
+          userId: req.user.id,
+          firstName: firstName || u?.firstName || "",
+          lastName: lastName || u?.lastName || "",
+          email: u?.email || "",
+          phoneNumber: phoneNumber || u?.phoneNumber || "",
+          age: age ? Number(age) : 0,
+          gender: gender || "unspecified",
+          address: address || "",
+        })
+        .returning();
+      result = created;
+    }
+
+    // Also sync firstName, lastName, phoneNumber to the users table
+    const userUpdates: Record<string, any> = {};
+    if (firstName !== undefined) userUpdates.firstName = String(firstName).trim();
+    if (lastName !== undefined) userUpdates.lastName = String(lastName).trim();
+    if (phoneNumber !== undefined) userUpdates.phoneNumber = String(phoneNumber).trim();
+
+    if (Object.keys(userUpdates).length > 0) {
+      await db.update(users).set(userUpdates).where(eq(users.id, req.user.id));
+    }
+
+    const { password: _p, ...resultSafe } = result;
+
+    res.json({
+      success: true,
+      message: "Patient profile updated successfully",
+      data: resultSafe,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// --------------------------------------------------
+// GET ALL PATIENTS (ADMIN & SUPERADMIN)
+// GET /api/users/patients
+// --------------------------------------------------
+export const getAllPatients = async (
+  _req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const patientList = await db
+      .select({
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        phoneNumber: users.phoneNumber,
+        role: users.role,
+        createdAt: users.createdAt,
+        age: patientProfile.age,
+        gender: patientProfile.gender,
+        address: patientProfile.address,
+      })
+      .from(users)
+      .leftJoin(patientProfile, eq(users.id, patientProfile.userId))
+      .where(eq(users.role, "patient"))
+      .orderBy(desc(users.createdAt));
+
+    res.json({
+      success: true,
+      data: patientList,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// --------------------------------------------------
+// DELETE PATIENT (ADMIN & SUPERADMIN)
+// DELETE /api/users/patients/:id
+// --------------------------------------------------
+export const deletePatient = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const rawId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const id = parseInt(rawId, 10);
+
+    if (isNaN(id)) {
+      res.status(400).json({
+        success: false,
+        error: "Invalid patient ID",
+      });
+      return;
+    }
+
+    // Verify user exists and is a patient
+    const [patientUser] = await db
+      .select({ id: users.id, role: users.role })
+      .from(users)
+      .where(eq(users.id, id));
+
+    if (!patientUser) {
+      res.status(404).json({
+        success: false,
+        error: "Patient not found",
+      });
+      return;
+    }
+
+    if (patientUser.role !== "patient") {
+      res.status(403).json({
+        success: false,
+        error: "Only patient accounts can be deleted via this endpoint",
+      });
+      return;
+    }
+
+    // Decouple patient from consultations so historical consultations remain intact
+    await db
+      .update(consultations)
+      .set({ patientId: null })
+      .where(eq(consultations.patientId, id));
+
+    // Delete patient profile explicitly
+    await db.delete(patientProfile).where(eq(patientProfile.userId, id));
+
+    // Delete user from users table
+    await db.delete(users).where(eq(users.id, id));
+
+    res.json({
+      success: true,
+      message: "Patient record deleted successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

@@ -9,6 +9,10 @@ import {
   getUserById,
   loginUser,
   registerUser,
+  getPatientProfile,
+  updatePatientProfile,
+  getAllPatients,
+  deletePatient,
 } from "../controllers/userConrtoller";
 import { authenticate } from "../middleware/auth";
 import { requireRole } from "../middleware/role";
@@ -25,6 +29,25 @@ router.post("/login", loginUser);
 router.get("/doctors", getDoctors);
 router.get("/user", authenticate, getUser);
 router.get("/me", authenticate, getUser);
+
+// Patient profile endpoints
+router.get("/patient-profile", authenticate, getPatientProfile);
+router.put("/patient-profile", authenticate, updatePatientProfile);
+router.patch("/patient-profile", authenticate, updatePatientProfile);
+
+// Patient management routes (admin & superadmin)
+router.get(
+  "/patients",
+  authenticate,
+  requireRole("superadmin", "admin"),
+  getAllPatients,
+);
+router.delete(
+  "/patients/:id",
+  authenticate,
+  requireRole("superadmin", "admin"),
+  deletePatient,
+);
 
 // Superadmin-only management routes
 router.post(
