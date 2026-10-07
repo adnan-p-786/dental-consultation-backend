@@ -1,9 +1,9 @@
 {
   "enabled": true,
-  "instantAckEnabled": true,
-  "reminder24hEnabled": true,
+  "instantAckEnabled": false,
+  "reminder24hEnabled": false,
   "reminder24hHours": 24,
-  "reminder1hEnabled": true,
+  "reminder1hEnabled": false,
   "reminder1hMinutes": 60,
   "emailEnabled": false,
   "smsEnabled": false,

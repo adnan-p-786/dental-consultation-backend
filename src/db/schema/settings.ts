@@ -104,6 +104,10 @@ export const settings = pgTable("settings", {
 
   emailTemplates: jsonb("email_templates"),
 
+  doctorAvailability: jsonb("doctor_availability"),
+
+  generalAppointmentSettings: jsonb("general_appointment_settings"),
+
   // --------------------------------------------------
   // Audit
   // --------------------------------------------------

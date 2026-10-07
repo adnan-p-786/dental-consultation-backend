@@ -569,11 +569,13 @@ export const sendAppointmentReminderNotification = async (
   const reminderLabel = isOneHour
     ? "Upcoming Consultation in 1 Hour"
     : appointment.reminderType === "24_hour"
-    ? "Upcoming Consultation Tomorrow"
-    : `Upcoming Consultation in ${appointment.customHours || 24} Hours`;
+      ? "Upcoming Consultation Tomorrow"
+      : `Upcoming Consultation in ${appointment.customHours || 24} Hours`;
 
   const bannerColor = isOneHour ? "#d97706" : "#0d9488";
-  const subjectPrefix = isOneHour ? "⏰ URGENT REMINDER (In 1 Hour):" : "📅 Reminder:";
+  const subjectPrefix = isOneHour
+    ? "⏰ URGENT REMINDER (In 1 Hour):"
+    : "📅 Reminder:";
 
   const doctorPlain = appointment.assignedDoctorName
     ? `\n- Assigned Doctor: ${appointment.assignedDoctorName}`

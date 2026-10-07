@@ -84,7 +84,7 @@ const getOrCreateSettings = async (userId?: number) => {
 export const getSettings = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userId = req.user?.id ? Number(req.user.id) : undefined;
@@ -107,7 +107,7 @@ export const getSettings = async (
 export const updateSettings = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userId = req.user?.id ? Number(req.user.id) : undefined;
@@ -136,6 +136,8 @@ export const updateSettings = async (
       appointmentStatuses,
       consultationTypes,
       emailTemplates,
+      doctorAvailability,
+      generalAppointmentSettings,
     } = req.body;
 
     // ------------------------------------------------
@@ -231,8 +233,7 @@ export const updateSettings = async (
     }
 
     if (manualMeetingLink !== undefined) {
-      updateData.manualMeetingLink =
-        String(manualMeetingLink).trim() || null;
+      updateData.manualMeetingLink = String(manualMeetingLink).trim() || null;
     }
 
     if (workingHours !== undefined) {
@@ -249,6 +250,14 @@ export const updateSettings = async (
 
     if (emailTemplates !== undefined) {
       updateData.emailTemplates = emailTemplates;
+    }
+
+    if (doctorAvailability !== undefined) {
+      updateData.doctorAvailability = doctorAvailability;
+    }
+
+    if (generalAppointmentSettings !== undefined) {
+      updateData.generalAppointmentSettings = generalAppointmentSettings;
     }
 
     if (userId) {
@@ -294,7 +303,7 @@ export const updateSettings = async (
 export const getReminderSettings = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userId = req.user?.id ? Number(req.user.id) : undefined;
@@ -329,7 +338,7 @@ export const getReminderSettings = async (
 export const updateReminderSettings = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userId = req.user?.id ? Number(req.user.id) : undefined;
@@ -453,7 +462,7 @@ export const updateReminderSettings = async (
 export const getMeetingSettings = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userId = req.user?.id ? Number(req.user.id) : undefined;
@@ -479,15 +488,12 @@ export const getMeetingSettings = async (
 export const updateMeetingSettings = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userId = req.user?.id ? Number(req.user.id) : undefined;
 
-    const {
-      meetingProvider,
-      manualMeetingLink,
-    } = req.body;
+    const { meetingProvider, manualMeetingLink } = req.body;
 
     const allowedProviders = [
       "manual",
@@ -516,8 +522,7 @@ export const updateMeetingSettings = async (
         }),
 
         ...(manualMeetingLink !== undefined && {
-          manualMeetingLink:
-            String(manualMeetingLink).trim() || null,
+          manualMeetingLink: String(manualMeetingLink).trim() || null,
         }),
 
         ...(userId && {
