@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { eq } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import db from "../db";
 import { doctor } from "../db/schema/doctor";
 import { comparePassword, generateToken } from "../utils/auth";
@@ -11,7 +11,7 @@ export const getAllDoctors = async (
   next: NextFunction,
 ) => {
   try {
-    const allDoctors = await db.select().from(doctor);
+    const allDoctors = await db.select().from(doctor).orderBy(asc(doctor.id));
 
     res.json({
       success: true,

@@ -4,25 +4,16 @@ import {
   varchar,
   integer,
   boolean,
-  text,
-  timestamp,
   jsonb,
+  timestamp,
 } from "drizzle-orm/pg-core";
-
-import { users } from "./user";
 
 export const settings = pgTable("settings", {
   id: serial("id").primaryKey(),
 
-  // --------------------------------------------------
-  // Clinic
-  // --------------------------------------------------
-
   clinicName: varchar("clinic_name", {
-    length: 255,
-  })
-    .notNull()
-    .default("Dental Clinic"),
+    length: 200,
+  }).notNull(),
 
   supportEmail: varchar("support_email", {
     length: 255,
@@ -32,97 +23,61 @@ export const settings = pgTable("settings", {
     length: 50,
   }),
 
-  defaultDuration: integer("default_duration")
+  appointmentDuration: integer(
+    "appointment_duration"
+  )
     .notNull()
     .default(30),
 
-  // --------------------------------------------------
-  // Appointment acknowledgement
-  // --------------------------------------------------
-
-  instantAckEnabled: boolean("instant_ack_enabled")
+  bufferTime: integer("buffer_time")
     .notNull()
-    .default(true),
+    .default(10),
 
-  // --------------------------------------------------
-  // 24 hour reminder
-  // --------------------------------------------------
-
-  reminder24hEnabled: boolean("reminder_24h_enabled")
+  minNoticeHours: integer(
+    "min_notice_hours"
+  )
     .notNull()
-    .default(true),
+    .default(2),
 
-  reminder24hHours: integer("reminder_24h_hours")
+  maxBookingDays: integer(
+    "max_booking_days"
+  )
     .notNull()
-    .default(24),
+    .default(30),
 
-  // --------------------------------------------------
-  // 1 hour reminder
-  // --------------------------------------------------
-
-  reminder1hEnabled: boolean("reminder_1h_enabled")
-    .notNull()
-    .default(true),
-
-  reminder1hMinutes: integer("reminder_1h_minutes")
-    .notNull()
-    .default(60),
-
-  // --------------------------------------------------
-  // Notification channels
-  // --------------------------------------------------
-
-  emailEnabled: boolean("email_enabled")
-    .notNull()
-    .default(true),
-
-  smsEnabled: boolean("sms_enabled")
-    .notNull()
-    .default(false),
-
-  // --------------------------------------------------
-  // Meeting configuration
-  // --------------------------------------------------
-
-  meetingProvider: varchar("meeting_provider", {
+  videoProvider: varchar("video_provider", {
     length: 50,
   })
     .notNull()
-    .default("manual"),
+    .default("google_meet"),
 
-  manualMeetingLink: text("manual_meeting_link"),
+  manualMeetingLink: varchar("manual_meeting_link", {
+    length: 500,
+  }),
 
-  // --------------------------------------------------
-  // Future configurable settings
-  // --------------------------------------------------
+  enableEmailNotifications: boolean(
+    "enable_email_notifications"
+  )
+    .notNull()
+    .default(true),
 
-  workingHours: jsonb("working_hours"),
-
-  appointmentStatuses: jsonb("appointment_statuses"),
-
-  consultationTypes: jsonb("consultation_types"),
-
-  emailTemplates: jsonb("email_templates"),
+  workingHours: jsonb("working_hours_config"),
 
   doctorAvailability: jsonb("doctor_availability"),
 
+  emailTemplates: jsonb("email_templates_config"),
+
+  appointmentStatuses: jsonb("appointment_statuses_config"),
+
+  consultationTypes: jsonb("consultation_types_config"),
+
   generalAppointmentSettings: jsonb("general_appointment_settings"),
 
-  // --------------------------------------------------
-  // Audit
-  // --------------------------------------------------
+  createdAt: timestamp("created_at")
+    .defaultNow()
+    .notNull(),
 
-  updatedBy: integer("updated_by").references(() => users.id),
-
-  createdAt: timestamp("created_at", {
-    withTimezone: true,
-  })
-    .notNull()
-    .defaultNow(),
-
-  updatedAt: timestamp("updated_at", {
-    withTimezone: true,
-  })
-    .notNull()
-    .defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .notNull(),
 });

@@ -1,17 +1,6 @@
-import {
-  pgTable,
-  serial,
-  varchar,
-  integer,
-  text,
-  timestamp,
-} from "drizzle-orm/pg-core";
+import {pgTable,serial,varchar,integer,text,timestamp} from "drizzle-orm/pg-core";
 import { users } from "./user";
 
-/**
- * Patient Profile schema linked to users.id
- * Contains detailed demographic and contact information for patients
- */
 export const patientProfile = pgTable("patient_profile", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
@@ -30,7 +19,6 @@ export const patientProfile = pgTable("patient_profile", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Aliases for convenience across controllers/services
 export const patientProfiles = patientProfile;
 export const patients = patientProfile;
 

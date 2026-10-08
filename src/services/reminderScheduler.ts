@@ -163,16 +163,11 @@ export const checkAndSendAutomaticReminders = async (): Promise<{
       .limit(1);
 
     if (dbSetting) {
+      const s = dbSetting as any;
       config = {
         ...config,
-        enabled: dbSetting.emailEnabled ?? true,
-        instantAckEnabled: dbSetting.instantAckEnabled ?? true,
-        reminder24hEnabled: dbSetting.reminder24hEnabled ?? true,
-        reminder24hHours: dbSetting.reminder24hHours ?? 24,
-        reminder1hEnabled: dbSetting.reminder1hEnabled ?? true,
-        reminder1hMinutes: dbSetting.reminder1hMinutes ?? 60,
-        emailEnabled: dbSetting.emailEnabled ?? true,
-        smsEnabled: dbSetting.smsEnabled ?? false,
+        enabled: s.enableEmailNotifications ?? s.emailEnabled ?? true,
+        emailEnabled: s.enableEmailNotifications ?? s.emailEnabled ?? true,
       };
     }
   } catch (dbErr) {

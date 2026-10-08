@@ -1,5 +1,4 @@
 export * from "./appointment";
-export * from "./contact";
 export * from "./doctor";
 export * from "./user";
 export * from "./treatment";
@@ -7,3 +6,8 @@ export * from "./consultation";
 export * from "./settings";
 export * from "./report";
 export * from "./patient";
+export * from "./appointmentStatus";
+export * from "./consultationType";
+export * from "./workingHour";
+export * from "./reminderSetting";
+export * from "./emailTemplate";

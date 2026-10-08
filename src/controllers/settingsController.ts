@@ -2,545 +2,938 @@ import { Request, Response, NextFunction } from "express";
 import { eq } from "drizzle-orm";
 
 import { db } from "../config/db";
+
 import { settings } from "../db/schema/settings";
-import { AuthenticatedRequest } from "../middleware/auth";
-import { saveReminderConfig } from "../services/reminderScheduler";
+import { treatments } from "../db/schema/treatment";
+import { appointmentStatuses } from "../db/schema/appointmentStatus";
+import { consultationTypes } from "../db/schema/consultationType";
+import { workingHours } from "../db/schema/workingHour";
+import { reminderSettings } from "../db/schema/reminderSetting";
+import { emailTemplates } from "../db/schema/emailTemplate";
+import { saveReminderConfig, getReminderConfig } from "../services/reminderScheduler";
 
-// --------------------------------------------------
-// Default settings
-// --------------------------------------------------
+/* =====================================================
+   HELPER: FULL SETTINGS BUILDER
+===================================================== */
 
-const DEFAULT_SETTINGS = {
-  clinicName: "Dental Clinic",
-  supportEmail: "",
-  clinicPhone: "",
-  defaultDuration: 30,
-
-  instantAckEnabled: true,
-
-  reminder24hEnabled: true,
-  reminder24hHours: 24,
-
-  reminder1hEnabled: true,
-  reminder1hMinutes: 60,
-
-  emailEnabled: true,
-  smsEnabled: false,
-
-  meetingProvider: "manual",
-  manualMeetingLink: "",
+const getStatusColor = (name: string): string => {
+  const lower = name.toLowerCase();
+  if (lower.includes("pending") || lower.includes("request")) return "amber";
+  if (lower.includes("review")) return "teal";
+  if (lower.includes("propos")) return "blue";
+  if (lower.includes("approv") || lower.includes("confirm")) return "emerald";
+  if (lower.includes("complete")) return "indigo";
+  if (lower.includes("cancel")) return "rose";
+  if (lower.includes("reject")) return "red";
+  return "teal";
 };
 
-// --------------------------------------------------
-// Get / create singleton settings row
-// --------------------------------------------------
+const DEFAULT_DOCTOR_AVAILABILITY = {
+  defaultStatus: "available",
+  maxParallelPerSlot: 1,
+  assignmentMode: "round_robin",
+  autoBusyDuringCall: true,
+  allowEmergencyOverride: true,
+};
 
-const getOrCreateSettings = async (userId?: number) => {
-  const existing = await db
-    .select()
-    .from(settings)
-    .where(eq(settings.id, 1))
-    .limit(1);
+const DEFAULT_GENERAL_APPOINTMENT_SETTINGS = {
+  minNoticeHours: 2,
+  maxAdvanceDays: 30,
+  allowSameDayBooking: true,
+  cancellationCutoffHours: 2,
+  maxActivePerPatient: 3,
+  allowDocumentUpload: true,
+  requireDocumentUpload: false,
+  autoConfirmExistingPatients: false,
+  bufferTimeMinutes: 10,
+};
 
-  if (existing.length > 0) {
-    return existing[0];
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+const buildFullSettings = async () => {
+  let [settingRow] = await db.select().from(settings).limit(1);
+  if (!settingRow) {
+    const [created] = await db
+      .insert(settings)
+      .values({
+        clinicName: "32 Stories Dental",
+        supportEmail: "32storiesdental@gmail.com",
+        appointmentDuration: 30,
+        bufferTime: 10,
+        minNoticeHours: 2,
+        maxBookingDays: 30,
+        videoProvider: "google_meet",
+        enableEmailNotifications: true,
+      })
+      .returning();
+    settingRow = created;
   }
 
-  const inserted = await db
-    .insert(settings)
-    .values({
-      id: 1,
+  const [dbWorkingHours, dbStatuses, dbConsultationTypes, dbEmailTemplates] = await Promise.all([
+    db.select().from(workingHours),
+    db.select().from(appointmentStatuses),
+    db.select().from(consultationTypes),
+    db.select().from(emailTemplates),
+  ]);
 
-      clinicName: DEFAULT_SETTINGS.clinicName,
-      supportEmail: DEFAULT_SETTINGS.supportEmail,
-      clinicPhone: DEFAULT_SETTINGS.clinicPhone,
-      defaultDuration: DEFAULT_SETTINGS.defaultDuration,
+  const reminderConfig = getReminderConfig();
 
-      instantAckEnabled: DEFAULT_SETTINGS.instantAckEnabled,
+  const formattedWorkingHours = dbWorkingHours.map((wh) => ({
+    id: wh.id,
+    day: wh.dayOfWeek,
+    isOpen: wh.isWorking,
+    openTime: (wh.startTime || "08:00").slice(0, 5),
+    closeTime: (wh.endTime || "19:00").slice(0, 5),
+    hasBreak: Boolean(wh.breakStart && wh.breakEnd),
+    breakStart: wh.breakStart ? wh.breakStart.slice(0, 5) : "13:00",
+    breakEnd: wh.breakEnd ? wh.breakEnd.slice(0, 5) : "14:00",
+  }));
 
-      reminder24hEnabled: DEFAULT_SETTINGS.reminder24hEnabled,
-      reminder24hHours: DEFAULT_SETTINGS.reminder24hHours,
+  const formattedStatuses = dbStatuses.map((st) => ({
+    id: st.id,
+    key: st.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""),
+    label: st.name,
+    color: getStatusColor(st.name),
+    description: `Status: ${st.name}`,
+    patientCanCancel: !["completed", "cancelled", "rejected"].includes(st.name.toLowerCase()),
+    isActive: st.isActive,
+  }));
 
-      reminder1hEnabled: DEFAULT_SETTINGS.reminder1hEnabled,
-      reminder1hMinutes: DEFAULT_SETTINGS.reminder1hMinutes,
+  const formattedConsultationTypes = dbConsultationTypes.map((ct) => ({
+    id: String(ct.id),
+    name: ct.name,
+    description: ct.description || "",
+    defaultDuration: 30,
+    isActive: ct.isActive,
+    requiresMeetingLink: ct.name.toLowerCase().includes("video") || ct.name.toLowerCase().includes("online"),
+    badgeText: ct.name.toLowerCase().includes("video") ? "Tele-Health" : "In-Clinic",
+  }));
 
-      emailEnabled: DEFAULT_SETTINGS.emailEnabled,
-      smsEnabled: DEFAULT_SETTINGS.smsEnabled,
+  const formattedEmailTemplates = dbEmailTemplates.map((et) => ({
+    id: String(et.id),
+    name: et.name,
+    subject: et.subject,
+    bodySummary: et.body,
+    enabled: et.isActive,
+  }));
 
-      meetingProvider: DEFAULT_SETTINGS.meetingProvider,
-      manualMeetingLink: DEFAULT_SETTINGS.manualMeetingLink,
+  const storedGeneralSettings = asRecord(settingRow.generalAppointmentSettings);
+  const storedDoctorAvailability = asRecord(settingRow.doctorAvailability);
 
-      updatedBy: userId ?? null,
-    })
-    .returning();
-
-  return inserted[0];
+  return {
+    id: settingRow.id,
+    clinicName: settingRow.clinicName,
+    supportEmail: settingRow.supportEmail || "",
+    clinicPhone: settingRow.clinicPhone || "+1 (555) 234-CARE",
+    defaultDuration: settingRow.appointmentDuration,
+    bufferTimeMinutes: settingRow.bufferTime,
+    meetingProvider: settingRow.videoProvider || "google_meet",
+    manualMeetingLink: settingRow.manualMeetingLink || "",
+    instantAckEnabled: reminderConfig.instantAckEnabled ?? true,
+    reminder24hEnabled: reminderConfig.reminder24hEnabled ?? true,
+    reminder24hHours: reminderConfig.reminder24hHours ?? 24,
+    reminder1hEnabled: reminderConfig.reminder1hEnabled ?? true,
+    reminder1hMinutes: reminderConfig.reminder1hMinutes ?? 60,
+    emailEnabled: settingRow.enableEmailNotifications ?? true,
+    smsEnabled: reminderConfig.smsEnabled ?? false,
+    workingHours: Array.isArray(settingRow.workingHours)
+      ? settingRow.workingHours
+      : formattedWorkingHours.length > 0
+        ? formattedWorkingHours
+        : undefined,
+    doctorAvailability: {
+      ...DEFAULT_DOCTOR_AVAILABILITY,
+      ...storedDoctorAvailability,
+    },
+    emailTemplates: Array.isArray(settingRow.emailTemplates)
+      ? settingRow.emailTemplates
+      : formattedEmailTemplates.length > 0
+        ? formattedEmailTemplates
+        : undefined,
+    appointmentStatuses: Array.isArray(settingRow.appointmentStatuses)
+      ? settingRow.appointmentStatuses
+      : formattedStatuses.length > 0
+        ? formattedStatuses
+        : undefined,
+    consultationTypes: Array.isArray(settingRow.consultationTypes)
+      ? settingRow.consultationTypes
+      : formattedConsultationTypes.length > 0
+        ? formattedConsultationTypes
+        : undefined,
+    generalAppointmentSettings: {
+      ...DEFAULT_GENERAL_APPOINTMENT_SETTINGS,
+      ...storedGeneralSettings,
+      minNoticeHours: settingRow.minNoticeHours,
+      maxAdvanceDays: settingRow.maxBookingDays,
+      bufferTimeMinutes: settingRow.bufferTime,
+    },
+    updatedAt: settingRow.updatedAt,
+  };
 };
 
-// ==================================================
-// GET SETTINGS
-// ==================================================
+/* =====================================================
+   GENERAL SETTINGS
+===================================================== */
 
 export const getSettings = async (
-  req: AuthenticatedRequest,
+  req: Request,
   res: Response,
-  next: NextFunction,
+  next: NextFunction
 ) => {
   try {
-    const userId = req.user?.id ? Number(req.user.id) : undefined;
-
-    const setting = await getOrCreateSettings(userId);
-
-    return res.status(200).json({
+    const fullSettings = await buildFullSettings();
+    return res.json({
       success: true,
-      data: setting,
+      data: fullSettings,
     });
   } catch (error) {
     next(error);
   }
 };
 
-// ==================================================
-// UPDATE SETTINGS
-// ==================================================
 
 export const updateSettings = async (
-  req: AuthenticatedRequest,
+  req: Request,
   res: Response,
-  next: NextFunction,
+  next: NextFunction
 ) => {
   try {
-    const userId = req.user?.id ? Number(req.user.id) : undefined;
+    const body = req.body;
 
-    const {
-      clinicName,
-      supportEmail,
-      clinicPhone,
-      defaultDuration,
+    const existing = await db
+      .select()
+      .from(settings)
+      .limit(1);
 
-      instantAckEnabled,
+    // 1. Update settings table
+    const settingsPayload: Partial<typeof settings.$inferInsert> = {};
+    if (body.clinicName !== undefined) settingsPayload.clinicName = String(body.clinicName).trim();
+    if (body.supportEmail !== undefined) settingsPayload.supportEmail = body.supportEmail ? String(body.supportEmail).trim() : null;
+    if (body.clinicPhone !== undefined) settingsPayload.clinicPhone = body.clinicPhone ? String(body.clinicPhone).trim() : null;
+    if (body.defaultDuration !== undefined) settingsPayload.appointmentDuration = Number(body.defaultDuration);
+    else if (body.appointmentDuration !== undefined) settingsPayload.appointmentDuration = Number(body.appointmentDuration);
 
-      reminder24hEnabled,
-      reminder24hHours,
+    if (body.bufferTimeMinutes !== undefined) settingsPayload.bufferTime = Number(body.bufferTimeMinutes);
+    else if (body.bufferTime !== undefined) settingsPayload.bufferTime = Number(body.bufferTime);
 
-      reminder1hEnabled,
-      reminder1hMinutes,
-
-      emailEnabled,
-      smsEnabled,
-
-      meetingProvider,
-      manualMeetingLink,
-
-      workingHours,
-      appointmentStatuses,
-      consultationTypes,
-      emailTemplates,
-      doctorAvailability,
-      generalAppointmentSettings,
-    } = req.body;
-
-    // ------------------------------------------------
-    // Validation
-    // ------------------------------------------------
-
-    if (
-      defaultDuration !== undefined &&
-      ![30, 45, 60].includes(Number(defaultDuration))
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Default duration must be 30, 45, or 60 minutes",
-      });
+    if (body.generalAppointmentSettings?.minNoticeHours !== undefined) {
+      settingsPayload.minNoticeHours = Number(body.generalAppointmentSettings.minNoticeHours);
+    } else if (body.minNoticeHours !== undefined) {
+      settingsPayload.minNoticeHours = Number(body.minNoticeHours);
     }
 
-    if (
-      reminder24hHours !== undefined &&
-      ![48, 24, 12].includes(Number(reminder24hHours))
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "24-hour reminder must be 48, 24, or 12 hours",
-      });
+    if (body.generalAppointmentSettings?.maxAdvanceDays !== undefined) {
+      settingsPayload.maxBookingDays = Number(body.generalAppointmentSettings.maxAdvanceDays);
+    } else if (body.maxBookingDays !== undefined) {
+      settingsPayload.maxBookingDays = Number(body.maxBookingDays);
     }
 
-    if (
-      reminder1hMinutes !== undefined &&
-      ![120, 60, 30].includes(Number(reminder1hMinutes))
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "1-hour reminder must be 120, 60, or 30 minutes",
-      });
+    if (body.meetingProvider !== undefined) settingsPayload.videoProvider = String(body.meetingProvider);
+    else if (body.videoProvider !== undefined) settingsPayload.videoProvider = String(body.videoProvider);
+
+    if (body.manualMeetingLink !== undefined) {
+      settingsPayload.manualMeetingLink = body.manualMeetingLink
+        ? String(body.manualMeetingLink).trim()
+        : null;
     }
 
-    const current = await getOrCreateSettings(userId);
-
-    // ------------------------------------------------
-    // Update object
-    // ------------------------------------------------
-
-    const updateData: Record<string, any> = {
-      updatedAt: new Date(),
-    };
-
-    if (clinicName !== undefined) {
-      updateData.clinicName = String(clinicName).trim();
+    if (body.workingHours !== undefined) settingsPayload.workingHours = body.workingHours;
+    if (body.doctorAvailability !== undefined) settingsPayload.doctorAvailability = body.doctorAvailability;
+    if (body.emailTemplates !== undefined) settingsPayload.emailTemplates = body.emailTemplates;
+    if (body.appointmentStatuses !== undefined) settingsPayload.appointmentStatuses = body.appointmentStatuses;
+    if (body.consultationTypes !== undefined) settingsPayload.consultationTypes = body.consultationTypes;
+    if (body.generalAppointmentSettings !== undefined) {
+      settingsPayload.generalAppointmentSettings = body.generalAppointmentSettings;
     }
 
-    if (supportEmail !== undefined) {
-      updateData.supportEmail = String(supportEmail).trim();
+    if (body.emailEnabled !== undefined) settingsPayload.enableEmailNotifications = Boolean(body.emailEnabled);
+    else if (body.enableEmailNotifications !== undefined) settingsPayload.enableEmailNotifications = Boolean(body.enableEmailNotifications);
+
+    settingsPayload.updatedAt = new Date();
+
+    if (!existing.length) {
+      await db.insert(settings).values({
+        clinicName: "32 Stories Dental",
+        ...settingsPayload,
+      } as typeof settings.$inferInsert);
+    } else {
+      await db
+        .update(settings)
+        .set(settingsPayload)
+        .where(eq(settings.id, existing[0].id));
     }
 
-    if (clinicPhone !== undefined) {
-      updateData.clinicPhone = String(clinicPhone).trim();
+    // 2. Update reminder scheduler config
+    saveReminderConfig({
+      instantAckEnabled: body.instantAckEnabled,
+      reminder24hEnabled: body.reminder24hEnabled,
+      reminder24hHours: body.reminder24hHours,
+      reminder1hEnabled: body.reminder1hEnabled,
+      reminder1hMinutes: body.reminder1hMinutes,
+      emailEnabled: body.emailEnabled,
+      smsEnabled: body.smsEnabled,
+    });
+
+    // 3. Update working_hours if provided
+    if (Array.isArray(body.workingHours)) {
+      for (const item of body.workingHours) {
+        const day = item.day || item.dayOfWeek;
+        if (!day) continue;
+        const [existingWh] = await db
+          .select()
+          .from(workingHours)
+          .where(eq(workingHours.dayOfWeek, day));
+
+        const isWorking = item.isOpen !== undefined ? Boolean(item.isOpen) : (item.isWorking !== undefined ? Boolean(item.isWorking) : true);
+        const startTime = (item.openTime || item.startTime || "08:00").slice(0, 8);
+        const endTime = (item.closeTime || item.endTime || "19:00").slice(0, 8);
+        const hasBreak = item.hasBreak !== undefined ? Boolean(item.hasBreak) : true;
+        const breakStart = hasBreak && (item.breakStart || item.breakStart === "") ? item.breakStart.slice(0, 8) : null;
+        const breakEnd = hasBreak && (item.breakEnd || item.breakEnd === "") ? item.breakEnd.slice(0, 8) : null;
+
+        if (existingWh) {
+          await db
+            .update(workingHours)
+            .set({
+              startTime,
+              endTime,
+              breakStart,
+              breakEnd,
+              isWorking,
+              updatedAt: new Date(),
+            })
+            .where(eq(workingHours.id, existingWh.id));
+        } else {
+          await db.insert(workingHours).values({
+            dayOfWeek: day,
+            startTime,
+            endTime,
+            breakStart,
+            breakEnd,
+            isWorking,
+          });
+        }
+      }
     }
 
-    if (defaultDuration !== undefined) {
-      updateData.defaultDuration = Number(defaultDuration);
+    // 4. Update appointment statuses if provided
+    if (Array.isArray(body.appointmentStatuses)) {
+      for (const st of body.appointmentStatuses) {
+        if (st.id) {
+          await db
+            .update(appointmentStatuses)
+            .set({
+              isActive: st.isActive ?? true,
+              updatedAt: new Date(),
+            })
+            .where(eq(appointmentStatuses.id, Number(st.id)));
+        }
+      }
     }
 
-    if (instantAckEnabled !== undefined) {
-      updateData.instantAckEnabled = Boolean(instantAckEnabled);
+    // 5. Update consultation types if provided
+    if (Array.isArray(body.consultationTypes)) {
+      for (const ct of body.consultationTypes) {
+        if (ct.id && !isNaN(Number(ct.id))) {
+          await db
+            .update(consultationTypes)
+            .set({
+              description: ct.description ?? null,
+              isActive: ct.isActive ?? true,
+              updatedAt: new Date(),
+            })
+            .where(eq(consultationTypes.id, Number(ct.id)));
+        }
+      }
     }
 
-    if (reminder24hEnabled !== undefined) {
-      updateData.reminder24hEnabled = Boolean(reminder24hEnabled);
+    // 6. Update email templates if provided
+    if (Array.isArray(body.emailTemplates)) {
+      for (const tmpl of body.emailTemplates) {
+        if (tmpl.id && !isNaN(Number(tmpl.id))) {
+          await db
+            .update(emailTemplates)
+            .set({
+              subject: tmpl.subject,
+              body: tmpl.bodySummary || tmpl.body,
+              isActive: tmpl.enabled !== undefined ? Boolean(tmpl.enabled) : true,
+              updatedAt: new Date(),
+            })
+            .where(eq(emailTemplates.id, Number(tmpl.id)));
+        }
+      }
     }
 
-    if (reminder24hHours !== undefined) {
-      updateData.reminder24hHours = Number(reminder24hHours);
-    }
+    const fullSettings = await buildFullSettings();
 
-    if (reminder1hEnabled !== undefined) {
-      updateData.reminder1hEnabled = Boolean(reminder1hEnabled);
-    }
-
-    if (reminder1hMinutes !== undefined) {
-      updateData.reminder1hMinutes = Number(reminder1hMinutes);
-    }
-
-    if (emailEnabled !== undefined) {
-      updateData.emailEnabled = Boolean(emailEnabled);
-    }
-
-    if (smsEnabled !== undefined) {
-      updateData.smsEnabled = Boolean(smsEnabled);
-    }
-
-    if (meetingProvider !== undefined) {
-      updateData.meetingProvider = String(meetingProvider);
-    }
-
-    if (manualMeetingLink !== undefined) {
-      updateData.manualMeetingLink = String(manualMeetingLink).trim() || null;
-    }
-
-    if (workingHours !== undefined) {
-      updateData.workingHours = workingHours;
-    }
-
-    if (appointmentStatuses !== undefined) {
-      updateData.appointmentStatuses = appointmentStatuses;
-    }
-
-    if (consultationTypes !== undefined) {
-      updateData.consultationTypes = consultationTypes;
-    }
-
-    if (emailTemplates !== undefined) {
-      updateData.emailTemplates = emailTemplates;
-    }
-
-    if (doctorAvailability !== undefined) {
-      updateData.doctorAvailability = doctorAvailability;
-    }
-
-    if (generalAppointmentSettings !== undefined) {
-      updateData.generalAppointmentSettings = generalAppointmentSettings;
-    }
-
-    if (userId) {
-      updateData.updatedBy = userId;
-    }
-
-    // ------------------------------------------------
-    // Update database
-    // ------------------------------------------------
-
-    const updated = await db
-      .update(settings)
-      .set(updateData)
-      .where(eq(settings.id, current.id))
-      .returning();
-
-    if (updated[0]) {
-      saveReminderConfig({
-        instantAckEnabled: updated[0].instantAckEnabled,
-        reminder24hEnabled: updated[0].reminder24hEnabled,
-        reminder24hHours: updated[0].reminder24hHours,
-        reminder1hEnabled: updated[0].reminder1hEnabled,
-        reminder1hMinutes: updated[0].reminder1hMinutes,
-        emailEnabled: updated[0].emailEnabled,
-        smsEnabled: updated[0].smsEnabled,
-      });
-    }
-
-    return res.status(200).json({
+    return res.json({
       success: true,
       message: "Settings updated successfully",
-      data: updated[0],
+      data: fullSettings,
     });
   } catch (error) {
     next(error);
   }
 };
 
-// ==================================================
-// GET REMINDER SETTINGS
-// ==================================================
 
-export const getReminderSettings = async (
-  req: AuthenticatedRequest,
+/* =====================================================
+   TREATMENTS
+===================================================== */
+
+export const getTreatments = async (
+  req: Request,
   res: Response,
-  next: NextFunction,
+  next: NextFunction
 ) => {
   try {
-    const userId = req.user?.id ? Number(req.user.id) : undefined;
+    const result = await db
+      .select()
+      .from(treatments);
 
-    const setting = await getOrCreateSettings(userId);
-
-    return res.status(200).json({
+    res.json({
       success: true,
-
-      data: {
-        instantAckEnabled: setting.instantAckEnabled,
-
-        reminder24hEnabled: setting.reminder24hEnabled,
-        reminder24hHours: setting.reminder24hHours,
-
-        reminder1hEnabled: setting.reminder1hEnabled,
-        reminder1hMinutes: setting.reminder1hMinutes,
-
-        emailEnabled: setting.emailEnabled,
-        smsEnabled: setting.smsEnabled,
-      },
+      data: result,
     });
   } catch (error) {
     next(error);
   }
 };
 
-// ==================================================
-// UPDATE REMINDER SETTINGS
-// ==================================================
 
-export const updateReminderSettings = async (
-  req: AuthenticatedRequest,
+export const createTreatment = async (
+  req: Request,
   res: Response,
-  next: NextFunction,
+  next: NextFunction
 ) => {
   try {
-    const userId = req.user?.id ? Number(req.user.id) : undefined;
+    const { name, description } = req.body;
 
-    const {
-      instantAckEnabled,
-      reminder24hEnabled,
-      reminder24hHours,
-      reminder1hEnabled,
-      reminder1hMinutes,
-      emailEnabled,
-      smsEnabled,
-    } = req.body;
-
-    // ------------------------------------------------
-    // Validation
-    // ------------------------------------------------
-
-    if (
-      reminder24hHours !== undefined &&
-      ![48, 24, 12].includes(Number(reminder24hHours))
-    ) {
+    if (!name) {
       return res.status(400).json({
         success: false,
-        message: "Invalid 24-hour reminder value",
+        message: "Treatment name is required",
       });
     }
 
-    if (
-      reminder1hMinutes !== undefined &&
-      ![120, 60, 30].includes(Number(reminder1hMinutes))
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid 1-hour reminder value",
-      });
-    }
-
-    const current = await getOrCreateSettings(userId);
-
-    const updated = await db
-      .update(settings)
-      .set({
-        ...(instantAckEnabled !== undefined && {
-          instantAckEnabled: Boolean(instantAckEnabled),
-        }),
-
-        ...(reminder24hEnabled !== undefined && {
-          reminder24hEnabled: Boolean(reminder24hEnabled),
-        }),
-
-        ...(reminder24hHours !== undefined && {
-          reminder24hHours: Number(reminder24hHours),
-        }),
-
-        ...(reminder1hEnabled !== undefined && {
-          reminder1hEnabled: Boolean(reminder1hEnabled),
-        }),
-
-        ...(reminder1hMinutes !== undefined && {
-          reminder1hMinutes: Number(reminder1hMinutes),
-        }),
-
-        ...(emailEnabled !== undefined && {
-          emailEnabled: Boolean(emailEnabled),
-        }),
-
-        ...(smsEnabled !== undefined && {
-          smsEnabled: Boolean(smsEnabled),
-        }),
-
-        ...(userId && {
-          updatedBy: userId,
-        }),
-
-        updatedAt: new Date(),
+    const [result] = await db
+      .insert(treatments)
+      .values({
+        name,
+        description,
       })
-      .where(eq(settings.id, current.id))
       .returning();
 
-    const result = updated[0];
-
-    if (result) {
-      saveReminderConfig({
-        instantAckEnabled: result.instantAckEnabled,
-        reminder24hEnabled: result.reminder24hEnabled,
-        reminder24hHours: result.reminder24hHours,
-        reminder1hEnabled: result.reminder1hEnabled,
-        reminder1hMinutes: result.reminder1hMinutes,
-        emailEnabled: result.emailEnabled,
-        smsEnabled: result.smsEnabled,
-      });
-    }
-
-    return res.status(200).json({
+    res.status(201).json({
       success: true,
-      message: "Reminder settings updated successfully",
-
-      data: {
-        instantAckEnabled: result.instantAckEnabled,
-
-        reminder24hEnabled: result.reminder24hEnabled,
-        reminder24hHours: result.reminder24hHours,
-
-        reminder1hEnabled: result.reminder1hEnabled,
-        reminder1hMinutes: result.reminder1hMinutes,
-
-        emailEnabled: result.emailEnabled,
-        smsEnabled: result.smsEnabled,
-      },
+      message: "Treatment created successfully",
+      data: result,
     });
   } catch (error) {
     next(error);
   }
 };
 
-// ==================================================
-// GET MEETING SETTINGS
-// ==================================================
 
-export const getMeetingSettings = async (
-  req: AuthenticatedRequest,
+export const updateTreatment = async (
+  req: Request,
   res: Response,
-  next: NextFunction,
+  next: NextFunction
 ) => {
   try {
-    const userId = req.user?.id ? Number(req.user.id) : undefined;
+    const id = Number(req.params.id);
 
-    const setting = await getOrCreateSettings(userId);
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        meetingProvider: setting.meetingProvider,
-        manualMeetingLink: setting.manualMeetingLink,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// ==================================================
-// UPDATE MEETING SETTINGS
-// ==================================================
-
-export const updateMeetingSettings = async (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const userId = req.user?.id ? Number(req.user.id) : undefined;
-
-    const { meetingProvider, manualMeetingLink } = req.body;
-
-    const allowedProviders = [
-      "manual",
-      "google_meet",
-      "zoom",
-      "microsoft_teams",
-    ];
-
-    if (
-      meetingProvider !== undefined &&
-      !allowedProviders.includes(String(meetingProvider))
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid meeting provider",
-      });
-    }
-
-    const current = await getOrCreateSettings(userId);
-
-    const updated = await db
-      .update(settings)
-      .set({
-        ...(meetingProvider !== undefined && {
-          meetingProvider: String(meetingProvider),
-        }),
-
-        ...(manualMeetingLink !== undefined && {
-          manualMeetingLink: String(manualMeetingLink).trim() || null,
-        }),
-
-        ...(userId && {
-          updatedBy: userId,
-        }),
-
-        updatedAt: new Date(),
-      })
-      .where(eq(settings.id, current.id))
+    const [result] = await db
+      .update(treatments)
+      .set(req.body)
+      .where(eq(treatments.id, id))
       .returning();
 
-    return res.status(200).json({
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: "Treatment not found",
+      });
+    }
+
+    res.json({
       success: true,
-      message: "Meeting settings updated successfully",
-      data: {
-        meetingProvider: updated[0].meetingProvider,
-        manualMeetingLink: updated[0].manualMeetingLink,
-      },
+      message: "Treatment updated successfully",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const deleteTreatment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const id = Number(req.params.id);
+
+    const [result] = await db
+      .update(treatments)
+      .set({
+        isActive: false,
+      })
+      .where(eq(treatments.id, id))
+      .returning();
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: "Treatment not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Treatment disabled successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+/* =====================================================
+   APPOINTMENT STATUSES
+===================================================== */
+
+export const getStatuses = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await db
+      .select()
+      .from(appointmentStatuses);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const createStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { name } = req.body;
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "Status name is required",
+      });
+    }
+
+    const [result] = await db
+      .insert(appointmentStatuses)
+      .values({ name })
+      .returning();
+
+    res.status(201).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const updateStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const id = Number(req.params.id);
+
+    const [result] = await db
+      .update(appointmentStatuses)
+      .set({
+        ...req.body,
+        updatedAt: new Date(),
+      })
+      .where(eq(appointmentStatuses.id, id))
+      .returning();
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: "Status not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const deleteStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const id = Number(req.params.id);
+
+    await db
+      .update(appointmentStatuses)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(appointmentStatuses.id, id));
+
+    res.json({
+      success: true,
+      message: "Status disabled successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+/* =====================================================
+   CONSULTATION TYPES
+===================================================== */
+
+export const getConsultationTypes = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await db
+      .select()
+      .from(consultationTypes);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const createConsultationType = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { name, description } = req.body;
+
+    const [result] = await db
+      .insert(consultationTypes)
+      .values({
+        name,
+        description,
+      })
+      .returning();
+
+    res.status(201).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const updateConsultationType = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const id = Number(req.params.id);
+
+    const [result] = await db
+      .update(consultationTypes)
+      .set({
+        ...req.body,
+        updatedAt: new Date(),
+      })
+      .where(eq(consultationTypes.id, id))
+      .returning();
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const deleteConsultationType = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const id = Number(req.params.id);
+
+    await db
+      .update(consultationTypes)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(consultationTypes.id, id));
+
+    res.json({
+      success: true,
+      message: "Consultation type disabled",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+/* =====================================================
+   WORKING HOURS
+===================================================== */
+
+export const getWorkingHours = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await db
+      .select()
+      .from(workingHours);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const updateWorkingHours = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const data = req.body;
+
+    for (const item of data) {
+      if (item.id) {
+        await db
+          .update(workingHours)
+          .set({
+            dayOfWeek: item.dayOfWeek,
+            startTime: item.startTime,
+            endTime: item.endTime,
+            breakStart: item.breakStart,
+            breakEnd: item.breakEnd,
+            isWorking: item.isWorking,
+            updatedAt: new Date(),
+          })
+          .where(eq(workingHours.id, item.id));
+      } else {
+        await db
+          .insert(workingHours)
+          .values(item);
+      }
+    }
+
+    const result = await db
+      .select()
+      .from(workingHours);
+
+    res.json({
+      success: true,
+      message: "Working hours updated",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+/* =====================================================
+   REMINDERS
+===================================================== */
+
+export const getReminders = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await db
+      .select()
+      .from(reminderSettings);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const createReminder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const [result] = await db
+      .insert(reminderSettings)
+      .values(req.body)
+      .returning();
+
+    res.status(201).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const updateReminder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const id = Number(req.params.id);
+
+    const [result] = await db
+      .update(reminderSettings)
+      .set({
+        ...req.body,
+        updatedAt: new Date(),
+      })
+      .where(eq(reminderSettings.id, id))
+      .returning();
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const deleteReminder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const id = Number(req.params.id);
+
+    await db
+      .delete(reminderSettings)
+      .where(eq(reminderSettings.id, id));
+
+    res.json({
+      success: true,
+      message: "Reminder deleted",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+/* =====================================================
+   EMAIL TEMPLATES
+===================================================== */
+
+export const getEmailTemplates = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await db
+      .select()
+      .from(emailTemplates);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const updateEmailTemplate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const id = Number(req.params.id);
+
+    const [result] = await db
+      .update(emailTemplates)
+      .set({
+        ...req.body,
+        updatedAt: new Date(),
+      })
+      .where(eq(emailTemplates.id, id))
+      .returning();
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: "Email template not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Email template updated",
+      data: result,
     });
   } catch (error) {
     next(error);
