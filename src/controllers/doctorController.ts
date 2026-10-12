@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { eq, asc } from "drizzle-orm";
 import db from "../db";
 import { doctor } from "../db/schema/doctor";
-import { comparePassword, generateToken } from "../utils/auth";
+import { comparePassword, generateToken, hashPassword } from "../utils/auth";
 
 // GET all doctors
 export const getAllDoctors = async (
@@ -126,12 +126,15 @@ export const addDoctor = async (
       });
     }
 
+    // Hash doctor password with bcrypt
+    const hashedPassword = await hashPassword(doctorPassword.trim());
+
     const [newDoctor] = await db
       .insert(doctor)
       .values({
         doctorName: finalName,
         doctorEmail: finalEmail,
-        doctorPassword: doctorPassword,
+        doctorPassword: hashedPassword,
         phoneNumber: finalPhone,
         specialization: finalSpecialization,
         workingHours: finalWorkingHours,
@@ -227,7 +230,8 @@ export const updateDoctor = async (
         .toLowerCase();
     }
     if (doctorPassword || req.body.password) {
-      updateData.doctorPassword = (doctorPassword || req.body.password).trim();
+      const rawPassword = (doctorPassword || req.body.password).trim();
+      updateData.doctorPassword = await hashPassword(rawPassword);
     }
     if (phoneNumber || req.body.phone || req.body.phone_number) {
       updateData.phoneNumber = (

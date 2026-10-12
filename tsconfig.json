@@ -6,7 +6,9 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "outDir": "./dist",
+    "noEmit": true
   },
   "include": ["src/**/*", "drizzle.config.ts"],
   "exclude": ["node_modules", "dist"]
