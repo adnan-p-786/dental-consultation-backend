@@ -537,7 +537,8 @@ export const registerUser = async (
       token,
       data: {
         ...newUser,
-        age: createdProfile?.age ?? (req.body.age ? Number(req.body.age) : null),
+        age:
+          createdProfile?.age ?? (req.body.age ? Number(req.body.age) : null),
         gender: createdProfile?.gender ?? req.body.gender ?? null,
         address: createdProfile?.address ?? req.body.address ?? null,
         profile: safeProfile,
@@ -652,67 +653,75 @@ export const loginUser = async (
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check doctor table if role is doctor
-    if (role && role.toLowerCase() === "doctor") {
+    // Helper to authenticate doctor
+    const tryAuthenticateDoctor = async () => {
       const [doc] = await db
         .select()
         .from(doctor)
         .where(eq(doctor.doctorEmail, normalizedEmail));
 
-      if (doc) {
-        let isPasswordValid = false;
-        if (doc.doctorPassword) {
-          try {
-            isPasswordValid = await comparePassword(
-              password,
-              doc.doctorPassword,
-            );
-          } catch {
-            // Not a bcrypt hash
-          }
-          if (!isPasswordValid) {
-            isPasswordValid = password === doc.doctorPassword;
-          }
-        }
+      if (!doc) return null;
 
+      let isPasswordValid = false;
+      if (doc.doctorPassword) {
+        try {
+          isPasswordValid = await comparePassword(password, doc.doctorPassword);
+        } catch {
+          // Not a bcrypt hash
+        }
         if (!isPasswordValid) {
-          res.status(401).json({
+          isPasswordValid = password === doc.doctorPassword;
+        }
+      }
+
+      if (!isPasswordValid) {
+        return { error: "Invalid email or password", status: 401 as const };
+      }
+
+      const token = generateToken({
+        id: doc.id,
+        email: doc.doctorEmail,
+        role: "doctor",
+      });
+
+      const cleanName = doc.doctorName.replace(/^Dr\.\s*/i, "").trim();
+      const nameParts = cleanName.split(" ");
+      const firstName = nameParts[0] || doc.doctorName;
+      const lastName = nameParts.slice(1).join(" ") || "";
+
+      return {
+        success: true,
+        message: "Login successful",
+        token,
+        data: {
+          id: doc.id,
+          name: doc.doctorName,
+          firstName,
+          lastName,
+          email: doc.doctorEmail,
+          phoneNumber: doc.phoneNumber,
+          role: "doctor",
+          specialization: doc.specialization,
+          workingHours: doc.workingHours,
+          status: doc.status,
+          avatar: doc.doctorPhoto,
+          createdAt: doc.createdAt,
+        },
+      };
+    };
+
+    // If role is explicitly doctor, check doctor table first
+    if (role && role.toLowerCase() === "doctor") {
+      const docResult = await tryAuthenticateDoctor();
+      if (docResult) {
+        if ("error" in docResult) {
+          res.status(docResult.status || 401).json({
             success: false,
-            error: "Invalid email or password",
+            error: docResult.error,
           });
           return;
         }
-
-        const token = generateToken({
-          id: doc.id,
-          email: doc.doctorEmail,
-          role: "doctor",
-        });
-
-        const cleanName = doc.doctorName.replace(/^Dr\.\s*/i, "").trim();
-        const nameParts = cleanName.split(" ");
-        const firstName = nameParts[0] || doc.doctorName;
-        const lastName = nameParts.slice(1).join(" ") || "";
-
-        res.json({
-          success: true,
-          message: "Login successful",
-          token,
-          data: {
-            id: doc.id,
-            name: doc.doctorName,
-            firstName,
-            lastName,
-            email: doc.doctorEmail,
-            phoneNumber: doc.phoneNumber,
-            role: "doctor",
-            specialization: doc.specialization,
-            workingHours: doc.workingHours,
-            status: doc.status,
-            avatar: doc.doctorPhoto,
-            createdAt: doc.createdAt,
-          },
-        });
+        res.json(docResult);
         return;
       }
     }
@@ -724,6 +733,20 @@ export const loginUser = async (
       .where(eq(users.email, normalizedEmail));
 
     if (!user) {
+      // If user not in users table, fallback to doctor table
+      const docResult = await tryAuthenticateDoctor();
+      if (docResult) {
+        if ("error" in docResult) {
+          res.status(docResult.status || 401).json({
+            success: false,
+            error: docResult.error,
+          });
+          return;
+        }
+        res.json(docResult);
+        return;
+      }
+
       res.status(401).json({
         success: false,
         error: "Invalid email or password",
@@ -742,10 +765,10 @@ export const loginUser = async (
       return;
     }
 
-    // Check role mismatch
+    // Check role mismatch if role parameter was provided
     if (role) {
       const requestedRole = role.toLowerCase();
-      const userRole = user.role.toLowerCase();
+      const userRole = (user.role || "").toLowerCase();
       const isAdminTypeMatch =
         (requestedRole === "admin" || requestedRole === "superadmin") &&
         (userRole === "admin" || userRole === "superadmin");
@@ -804,7 +827,10 @@ export const getPatientProfile = async (
 
     // If profile does not exist yet for this user, auto-create one from users table
     if (!profile) {
-      const [u] = await db.select().from(users).where(eq(users.id, req.user.id));
+      const [u] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, req.user.id));
       if (u) {
         const [created] = await db
           .insert(patientProfile)
@@ -862,10 +888,13 @@ export const updatePatientProfile = async (
       updatedAt: new Date(),
     };
 
-    if (firstName !== undefined) updateFields.firstName = String(firstName).trim();
+    if (firstName !== undefined)
+      updateFields.firstName = String(firstName).trim();
     if (lastName !== undefined) updateFields.lastName = String(lastName).trim();
-    if (phoneNumber !== undefined) updateFields.phoneNumber = String(phoneNumber).trim();
-    if (age !== undefined) updateFields.age = age === "" || age === null ? null : Number(age);
+    if (phoneNumber !== undefined)
+      updateFields.phoneNumber = String(phoneNumber).trim();
+    if (age !== undefined)
+      updateFields.age = age === "" || age === null ? null : Number(age);
     if (gender !== undefined) updateFields.gender = String(gender).trim();
     if (address !== undefined) updateFields.address = String(address).trim();
 
@@ -884,7 +913,10 @@ export const updatePatientProfile = async (
         .returning();
       result = updated;
     } else {
-      const [u] = await db.select().from(users).where(eq(users.id, req.user.id));
+      const [u] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, req.user.id));
       const [created] = await db
         .insert(patientProfile)
         .values({
@@ -903,9 +935,11 @@ export const updatePatientProfile = async (
 
     // Also sync firstName, lastName, phoneNumber to the users table
     const userUpdates: Record<string, any> = {};
-    if (firstName !== undefined) userUpdates.firstName = String(firstName).trim();
+    if (firstName !== undefined)
+      userUpdates.firstName = String(firstName).trim();
     if (lastName !== undefined) userUpdates.lastName = String(lastName).trim();
-    if (phoneNumber !== undefined) userUpdates.phoneNumber = String(phoneNumber).trim();
+    if (phoneNumber !== undefined)
+      userUpdates.phoneNumber = String(phoneNumber).trim();
 
     if (Object.keys(userUpdates).length > 0) {
       await db.update(users).set(userUpdates).where(eq(users.id, req.user.id));
@@ -1025,4 +1059,3 @@ export const deletePatient = async (
     next(error);
   }
 };
-

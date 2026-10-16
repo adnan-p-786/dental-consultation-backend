@@ -206,7 +206,20 @@ export const getAllAppointment = async (
     }
 
     let rows;
-    if (conditions.length > 0) {
+    if (email) {
+      rows = await db
+        .select({
+          appointment: appointments,
+          consultation: consultations,
+        })
+        .from(appointments)
+        .leftJoin(
+          consultations,
+          eq(appointments.id, consultations.appointmentId),
+        )
+        .where(ilike(appointments.patientEmail, email))
+        .orderBy(desc(appointments.id));
+    } else if (conditions.length > 0) {
       rows = await db
         .select({
           appointment: appointments,
@@ -259,6 +272,69 @@ export const getAllAppointment = async (
     res.json({
       success: true,
       data: allAppointments,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getPatientAppointments = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const email =
+      typeof req.query.email === "string" && req.query.email.trim()
+        ? req.query.email.trim().toLowerCase()
+        : null;
+
+    if (!email) {
+      return res.json({
+        success: true,
+        data: [],
+      });
+    }
+
+    const rows = await db
+      .select({
+        appointment: appointments,
+        consultation: consultations,
+      })
+      .from(appointments)
+      .leftJoin(
+        consultations,
+        eq(appointments.id, consultations.appointmentId),
+      )
+      .where(ilike(appointments.patientEmail, email))
+      .orderBy(desc(appointments.id));
+
+    const doctorsList = await db.select().from(doctor);
+    const doctorById = new Map<string, (typeof doctor.$inferSelect)>();
+    const doctorByName = new Map<string, (typeof doctor.$inferSelect)>();
+    doctorsList.forEach((d) => {
+      doctorById.set(String(d.id), d);
+      doctorByName.set(d.doctorName.toLowerCase().trim(), d);
+    });
+
+    const mapped = rows.map((r) => {
+      const docId = r.appointment.assignedDoctorId;
+      const docName = r.appointment.assignedDoctorName;
+      const matchedDoc =
+        (docId ? doctorById.get(String(docId)) : undefined) ||
+        (docName ? doctorByName.get(docName.toLowerCase().trim()) : undefined);
+
+      return {
+        ...r.appointment,
+        assignedDoctorPhoto: matchedDoc?.doctorPhoto || null,
+        assignedDoctorSpecialization: matchedDoc?.specialization || null,
+        consultation: r.consultation || null,
+      };
+    });
+
+    return res.json({
+      success: true,
+      data: mapped,
     });
   } catch (error) {
     next(error);

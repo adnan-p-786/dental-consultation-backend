@@ -3,6 +3,7 @@ import {
   cancelAppointment,
   createAppointment,
   getAllAppointment,
+  getPatientAppointments,
   updateAppointment,
   deleteAppointment,
   sendAppointmentReminder,
@@ -18,10 +19,9 @@ router.get("/reminder-settings", getReminderSettings);
 router.post("/reminder-settings", updateReminderSettings);
 router.patch("/reminder-settings", updateReminderSettings);
 
-router.get(
-  ["/get-all-appointment", "/get-appointments", "/patient-appointments", "/"],
-  getAllAppointment,
-);
+router.get("/get-all-appointment", getAllAppointment);
+router.get(["/get-appointments", "/patient-appointments"], getPatientAppointments);
+router.get("/", getAllAppointment);
 router.post(
   "/create-appointment",
   upload.single("supportingDocument"),
