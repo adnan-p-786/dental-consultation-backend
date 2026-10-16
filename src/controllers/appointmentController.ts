@@ -247,8 +247,8 @@ export const getAllAppointment = async (
     }
 
     const doctorsList = await db.select().from(doctor);
-    const doctorById = new Map<string, (typeof doctor.$inferSelect)>();
-    const doctorByName = new Map<string, (typeof doctor.$inferSelect)>();
+    const doctorById = new Map<string, typeof doctor.$inferSelect>();
+    const doctorByName = new Map<string, typeof doctor.$inferSelect>();
     doctorsList.forEach((d) => {
       doctorById.set(String(d.id), d);
       doctorByName.set(d.doctorName.toLowerCase().trim(), d);
@@ -302,16 +302,13 @@ export const getPatientAppointments = async (
         consultation: consultations,
       })
       .from(appointments)
-      .leftJoin(
-        consultations,
-        eq(appointments.id, consultations.appointmentId),
-      )
+      .leftJoin(consultations, eq(appointments.id, consultations.appointmentId))
       .where(ilike(appointments.patientEmail, email))
       .orderBy(desc(appointments.id));
 
     const doctorsList = await db.select().from(doctor);
-    const doctorById = new Map<string, (typeof doctor.$inferSelect)>();
-    const doctorByName = new Map<string, (typeof doctor.$inferSelect)>();
+    const doctorById = new Map<string, typeof doctor.$inferSelect>();
+    const doctorByName = new Map<string, typeof doctor.$inferSelect>();
     doctorsList.forEach((d) => {
       doctorById.set(String(d.id), d);
       doctorByName.set(d.doctorName.toLowerCase().trim(), d);
@@ -466,12 +463,16 @@ export const updateAppointment = async (
     if (phoneNumber !== undefined) updateFields.phoneNumber = phoneNumber;
     if (contactMethod !== undefined) updateFields.contactMethod = contactMethod;
     if (tratmentType !== undefined) updateFields.tratmentType = tratmentType;
-    if (preferredDate !== undefined) updateFields.preferredDate = cleanDate(preferredDate);
+    if (preferredDate !== undefined)
+      updateFields.preferredDate = cleanDate(preferredDate);
     if (preferredTime !== undefined) updateFields.preferredTime = preferredTime;
-    if (confirmedDate !== undefined) updateFields.confirmedDate = cleanDate(confirmedDate);
-    else if (preferredDate !== undefined) updateFields.confirmedDate = cleanDate(preferredDate);
+    if (confirmedDate !== undefined)
+      updateFields.confirmedDate = cleanDate(confirmedDate);
+    else if (preferredDate !== undefined)
+      updateFields.confirmedDate = cleanDate(preferredDate);
     if (confirmedTime !== undefined) updateFields.confirmedTime = confirmedTime;
-    else if (preferredTime !== undefined) updateFields.confirmedTime = preferredTime;
+    else if (preferredTime !== undefined)
+      updateFields.confirmedTime = preferredTime;
     if (additionalDescription !== undefined)
       updateFields.additionalDescription = additionalDescription;
 
@@ -484,10 +485,14 @@ export const updateAppointment = async (
             const uId = Number(idStr.replace("user-", ""));
             const [u] = await db.select().from(users).where(eq(users.id, uId));
             if (u) {
-              updateFields.assignedDoctorName = `Dr. ${u.firstName} ${u.lastName || ""}`.trim();
+              updateFields.assignedDoctorName =
+                `Dr. ${u.firstName} ${u.lastName || ""}`.trim();
             }
           } else if (!isNaN(Number(idStr))) {
-            const [d] = await db.select().from(doctor).where(eq(doctor.id, Number(idStr)));
+            const [d] = await db
+              .select()
+              .from(doctor)
+              .where(eq(doctor.id, Number(idStr)));
             if (d) {
               updateFields.assignedDoctorName = d.doctorName;
             }
