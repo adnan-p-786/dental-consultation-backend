@@ -27,6 +27,20 @@ export const appointments = pgTable("appointments", {
   confirmedDate: date("confirmed_date"),
   confirmedTime: varchar("confirmed_time", { length: 50 }),
   consultationNotes: jsonb("consultation_notes"),
+
+  // The doctor records the real start of the consultation.
+  // The lifecycle scheduler uses this to distinguish a no-start appointment
+  // from one that actually began.
+  consultationStartedAt: timestamp("consultation_started_at", {
+    withTimezone: true,
+  }),
+
+  // Set when the doctor ends the consultation or when the configured
+  // duration passes after it started.
+  consultationCompletedAt: timestamp("consultation_completed_at", {
+    withTimezone: true,
+  }),
+
   createdAt: timestamp("created_at").defaultNow(),
 });
 
