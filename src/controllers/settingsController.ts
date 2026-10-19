@@ -12,6 +12,8 @@ import { reminderSettings } from "../db/schema/reminderSetting";
 import { emailTemplates } from "../db/schema/emailTemplate";
 import { saveReminderConfig, getReminderConfig } from "../services/reminderScheduler";
 
+import { seedDefaultAppointmentStatuses } from "../services/appointmentLifecycleService";
+
 /* =====================================================
    HELPER: FULL SETTINGS BUILDER
 ===================================================== */
@@ -22,6 +24,8 @@ const getStatusColor = (name: string): string => {
   if (lower.includes("review")) return "teal";
   if (lower.includes("propos")) return "blue";
   if (lower.includes("approv") || lower.includes("confirm")) return "emerald";
+  if (lower.includes("in progress") || lower.includes("progress")) return "purple";
+  if (lower.includes("no show") || lower.includes("no_show")) return "rose";
   if (lower.includes("complete")) return "indigo";
   if (lower.includes("cancel")) return "rose";
   if (lower.includes("reject")) return "red";
@@ -72,6 +76,9 @@ const buildFullSettings = async () => {
     settingRow = created;
   }
 
+  // Ensure default statuses exist
+  await seedDefaultAppointmentStatuses();
+
   const [dbWorkingHours, dbStatuses, dbConsultationTypes, dbEmailTemplates] = await Promise.all([
     db.select().from(workingHours),
     db.select().from(appointmentStatuses),
@@ -92,15 +99,18 @@ const buildFullSettings = async () => {
     breakEnd: wh.breakEnd ? wh.breakEnd.slice(0, 5) : "14:00",
   }));
 
-  const formattedStatuses = dbStatuses.map((st) => ({
-    id: st.id,
-    key: st.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""),
-    label: st.name,
-    color: getStatusColor(st.name),
-    description: `Status: ${st.name}`,
-    patientCanCancel: !["completed", "cancelled", "rejected"].includes(st.name.toLowerCase()),
-    isActive: st.isActive,
-  }));
+  const formattedStatuses = dbStatuses.map((st) => {
+    const key = st.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    return {
+      id: st.id,
+      key,
+      label: st.name,
+      color: getStatusColor(st.name),
+      description: `Status: ${st.name}`,
+      patientCanCancel: !["completed", "cancelled", "rejected", "no_show", "in_progress"].includes(key),
+      isActive: st.isActive,
+    };
+  });
 
   const formattedConsultationTypes = dbConsultationTypes.map((ct) => ({
     id: String(ct.id),

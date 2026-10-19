@@ -5,6 +5,10 @@ import {
   startAutomaticReminderScheduler,
   stopAutomaticReminderScheduler,
 } from "./services/reminderScheduler";
+import {
+  startAppointmentLifecycleScheduler,
+  stopAppointmentLifecycleScheduler,
+} from "./services/appointmentLifecycleScheduler";
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5001;
 
@@ -12,11 +16,14 @@ const server = app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   // Launch automatic background reminder daemon
   startAutomaticReminderScheduler();
+  // Launch automatic appointment status lifecycle scheduler
+  startAppointmentLifecycleScheduler();
 });
 
 const shutdown = async (signal: string) => {
   console.log(`\n[${signal}] Shutting down gracefully...`);
   stopAutomaticReminderScheduler();
+  stopAppointmentLifecycleScheduler();
   server.close(async () => {
     try {
       await pool.end();

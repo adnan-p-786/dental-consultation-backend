@@ -17,6 +17,10 @@ import {
   getReminderConfig,
   saveReminderConfig,
 } from "../services/reminderScheduler";
+import {
+  startConsultation,
+  completeConsultation,
+} from "../services/appointmentLifecycleService";
 
 export const createAppointment = async (
   req: Request,
@@ -456,8 +460,31 @@ export const updateAppointment = async (
 
     const updateFields: Record<string, any> = {};
 
-    if (status !== undefined)
-      updateFields.status = String(status).toLowerCase();
+    if (status !== undefined) {
+      const normalizedStatus = String(status).toLowerCase().trim();
+      if (normalizedStatus === "in_progress") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "To start a consultation, please use the dedicated POST /api/appointments/:id/start-consultation endpoint.",
+        });
+      }
+      if (normalizedStatus === "completed") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "To complete a consultation, please use the dedicated POST /api/appointments/:id/complete-consultation endpoint.",
+        });
+      }
+      if (normalizedStatus === "no_show") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "No Show status is automatically managed by the background appointment lifecycle scheduler.",
+        });
+      }
+      updateFields.status = normalizedStatus;
+    }
     if (patientName !== undefined) updateFields.patientName = patientName;
     if (patientEmail !== undefined) updateFields.patientEmail = patientEmail;
     if (phoneNumber !== undefined) updateFields.phoneNumber = phoneNumber;
@@ -840,3 +867,67 @@ export const updateReminderSettings = async (
     next(error);
   }
 };
+
+/**
+ * POST /api/appointments/:id/start-consultation
+ * Protected for authenticated doctors and administrators.
+ */
+export const startAppointmentConsultation = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params;
+    const numId = Number(id);
+
+    if (isNaN(numId) || numId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid appointment ID",
+      });
+    }
+
+    const result = await startConsultation(numId);
+    return res.status(result.statusCode).json({
+      success: result.success,
+      message: result.message,
+      data: result.data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/appointments/:id/complete-consultation
+ * Protected for authenticated doctors and administrators.
+ */
+export const completeAppointmentConsultation = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params;
+    const numId = Number(id);
+
+    if (isNaN(numId) || numId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid appointment ID",
+      });
+    }
+
+    const { consultationNotes } = req.body || {};
+    const result = await completeConsultation(numId, consultationNotes);
+    return res.status(result.statusCode).json({
+      success: result.success,
+      message: result.message,
+      data: result.data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

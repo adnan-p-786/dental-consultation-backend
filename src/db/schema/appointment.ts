@@ -27,6 +27,12 @@ export const appointments = pgTable("appointments", {
   confirmedDate: date("confirmed_date"),
   confirmedTime: varchar("confirmed_time", { length: 50 }),
   consultationNotes: jsonb("consultation_notes"),
+  consultationStartedAt: timestamp("consultation_started_at", {
+    withTimezone: true,
+  }),
+  consultationCompletedAt: timestamp("consultation_completed_at", {
+    withTimezone: true,
+  }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

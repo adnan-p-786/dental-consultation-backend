@@ -1,9 +1,12 @@
-import { Pool, QueryResult, QueryResultRow } from "pg";
+import { Pool, QueryResult, QueryResultRow, types } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import dotenv from "dotenv";
 import * as schema from "../db/schema";
 
 dotenv.config();
+
+// Prevent node-postgres from parsing PostgreSQL DATE (OID 1082) as a shifted local Date object
+types.setTypeParser(1082, (val: string) => val);
 
 // PostgreSQL connection pool configuration
 export const pool = new Pool(

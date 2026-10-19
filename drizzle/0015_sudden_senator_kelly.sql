@@ -1,0 +1,2 @@
+ALTER TABLE "appointments" ADD COLUMN "consultation_started_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "appointments" ADD COLUMN "consultation_completed_at" timestamp with time zone;

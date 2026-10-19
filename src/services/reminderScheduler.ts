@@ -90,57 +90,17 @@ const saveReminderLogs = (logs: Record<string, string>) => {
   }
 };
 
+import { parseClinicDateTime } from "../utils/dateTime";
+
 /**
- * Parses appointment date and time strings into a concrete Date object.
+ * Parses appointment date and time strings into a concrete Date object
+ * using clinic timezone.
  */
 export const parseAppointmentDateTime = (
   dateVal: string | Date,
   timeStr?: string | null,
 ): Date => {
-  let datePart = "";
-  if (dateVal instanceof Date) {
-    datePart = dateVal.toISOString().split("T")[0];
-  } else if (typeof dateVal === "string") {
-    datePart = dateVal.includes("T") ? dateVal.split("T")[0] : dateVal.trim();
-  }
-
-  let hours = 10;
-  let minutes = 0;
-
-  if (timeStr) {
-    const raw = timeStr.trim().toLowerCase();
-    if (raw === "morning") {
-      hours = 9;
-      minutes = 0;
-    } else if (raw === "afternoon") {
-      hours = 14;
-      minutes = 0;
-    } else if (raw === "evening") {
-      hours = 17;
-      minutes = 0;
-    } else {
-      // Matches "10:30 AM", "2:15 pm", "14:00"
-      const match = raw.match(/^(\d{1,2}):(\d{2})(?:\s*([ap]m))?$/i);
-      if (match) {
-        let h = parseInt(match[1], 10);
-        const m = parseInt(match[2], 10);
-        const meridiem = match[3]?.toLowerCase();
-
-        if (meridiem === "pm" && h < 12) h += 12;
-        if (meridiem === "am" && h === 12) h = 0;
-
-        hours = h;
-        minutes = m;
-      }
-    }
-  }
-
-  const [yearStr, monthStr, dayStr] = datePart.split("-");
-  const year = parseInt(yearStr, 10);
-  const month = parseInt(monthStr, 10) - 1;
-  const day = parseInt(dayStr, 10);
-
-  return new Date(year, month, day, hours, minutes, 0, 0);
+  return parseClinicDateTime(dateVal, timeStr) || new Date();
 };
 
 let schedulerInterval: NodeJS.Timeout | null = null;
