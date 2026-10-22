@@ -505,28 +505,34 @@ export const updateAppointment = async (
 
     if (assignedDoctorId !== undefined) {
       updateFields.assignedDoctorId = String(assignedDoctorId);
-      if (!assignedDoctorName) {
-        try {
-          const idStr = String(assignedDoctorId);
-          if (idStr.startsWith("user-")) {
-            const uId = Number(idStr.replace("user-", ""));
-            const [u] = await db.select().from(users).where(eq(users.id, uId));
-            if (u) {
-              updateFields.assignedDoctorName =
-                `Dr. ${u.firstName} ${u.lastName || ""}`.trim();
+      try {
+        const idStr = String(assignedDoctorId);
+        if (idStr.startsWith("user-")) {
+          const uId = Number(idStr.replace("user-", ""));
+          const [u] = await db.select().from(users).where(eq(users.id, uId));
+          if (u) {
+            updateFields.assignedDoctorName =
+              `Dr. ${u.firstName} ${u.lastName || ""}`.trim();
+          }
+        } else if (!isNaN(Number(idStr))) {
+          const [d] = await db
+            .select()
+            .from(doctor)
+            .where(eq(doctor.id, Number(idStr)));
+          if (d) {
+            if (d.status === "on_leave") {
+              return res.status(400).json({
+                success: false,
+                message: `Doctor ${d.doctorName} is currently on leave and cannot be assigned.`,
+              });
             }
-          } else if (!isNaN(Number(idStr))) {
-            const [d] = await db
-              .select()
-              .from(doctor)
-              .where(eq(doctor.id, Number(idStr)));
-            if (d) {
+            if (!assignedDoctorName) {
               updateFields.assignedDoctorName = d.doctorName;
             }
           }
-        } catch (lookupErr) {
-          console.warn("Could not look up doctor name:", lookupErr);
         }
+      } catch (lookupErr) {
+        console.warn("Could not look up doctor:", lookupErr);
       }
     }
     if (assignedDoctorName !== undefined) {
@@ -576,7 +582,7 @@ export const updateAppointment = async (
         message: "Appointment not found",
       });
     }
-
+    
     let emailSent = false;
     if (updated.patientEmail) {
       const normalizedStatus = updated.status?.toLowerCase();
