@@ -582,7 +582,7 @@ export const updateAppointment = async (
         message: "Appointment not found",
       });
     }
-    
+
     let emailSent = false;
     if (updated.patientEmail) {
       const normalizedStatus = updated.status?.toLowerCase();
@@ -936,4 +936,3 @@ export const completeAppointmentConsultation = async (
     next(error);
   }
 };
-

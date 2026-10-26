@@ -22,15 +22,9 @@ export const workingHours = pgTable("working_hours", {
 
   breakEnd: time("break_end"),
 
-  isWorking: boolean("is_working")
-    .notNull()
-    .default(true),
+  isWorking: boolean("is_working").notNull().default(true),
 
-  createdAt: timestamp("created_at")
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

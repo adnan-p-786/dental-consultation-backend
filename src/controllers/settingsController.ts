@@ -10,7 +10,10 @@ import { consultationTypes } from "../db/schema/consultationType";
 import { workingHours } from "../db/schema/workingHour";
 import { reminderSettings } from "../db/schema/reminderSetting";
 import { emailTemplates } from "../db/schema/emailTemplate";
-import { saveReminderConfig, getReminderConfig } from "../services/reminderScheduler";
+import {
+  saveReminderConfig,
+  getReminderConfig,
+} from "../services/reminderScheduler";
 
 import { seedDefaultAppointmentStatuses } from "../services/appointmentLifecycleService";
 
@@ -24,7 +27,8 @@ const getStatusColor = (name: string): string => {
   if (lower.includes("review")) return "teal";
   if (lower.includes("propos")) return "blue";
   if (lower.includes("approv") || lower.includes("confirm")) return "emerald";
-  if (lower.includes("in progress") || lower.includes("progress")) return "purple";
+  if (lower.includes("in progress") || lower.includes("progress"))
+    return "purple";
   if (lower.includes("no show") || lower.includes("no_show")) return "rose";
   if (lower.includes("complete")) return "indigo";
   if (lower.includes("cancel")) return "rose";
@@ -79,12 +83,13 @@ const buildFullSettings = async () => {
   // Ensure default statuses exist
   await seedDefaultAppointmentStatuses();
 
-  const [dbWorkingHours, dbStatuses, dbConsultationTypes, dbEmailTemplates] = await Promise.all([
-    db.select().from(workingHours),
-    db.select().from(appointmentStatuses),
-    db.select().from(consultationTypes),
-    db.select().from(emailTemplates),
-  ]);
+  const [dbWorkingHours, dbStatuses, dbConsultationTypes, dbEmailTemplates] =
+    await Promise.all([
+      db.select().from(workingHours),
+      db.select().from(appointmentStatuses),
+      db.select().from(consultationTypes),
+      db.select().from(emailTemplates),
+    ]);
 
   const reminderConfig = getReminderConfig();
 
@@ -100,14 +105,23 @@ const buildFullSettings = async () => {
   }));
 
   const formattedStatuses = dbStatuses.map((st) => {
-    const key = st.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    const key = st.name
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_]/g, "");
     return {
       id: st.id,
       key,
       label: st.name,
       color: getStatusColor(st.name),
       description: `Status: ${st.name}`,
-      patientCanCancel: !["completed", "cancelled", "rejected", "no_show", "in_progress"].includes(key),
+      patientCanCancel: ![
+        "completed",
+        "cancelled",
+        "rejected",
+        "no_show",
+        "in_progress",
+      ].includes(key),
       isActive: st.isActive,
     };
   });
@@ -118,8 +132,12 @@ const buildFullSettings = async () => {
     description: ct.description || "",
     defaultDuration: 30,
     isActive: ct.isActive,
-    requiresMeetingLink: ct.name.toLowerCase().includes("video") || ct.name.toLowerCase().includes("online"),
-    badgeText: ct.name.toLowerCase().includes("video") ? "Tele-Health" : "In-Clinic",
+    requiresMeetingLink:
+      ct.name.toLowerCase().includes("video") ||
+      ct.name.toLowerCase().includes("online"),
+    badgeText: ct.name.toLowerCase().includes("video")
+      ? "Tele-Health"
+      : "In-Clinic",
   }));
 
   const formattedEmailTemplates = dbEmailTemplates.map((et) => ({
@@ -191,7 +209,7 @@ const buildFullSettings = async () => {
 export const getSettings = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const fullSettings = await buildFullSettings();
@@ -204,45 +222,58 @@ export const getSettings = async (
   }
 };
 
-
 export const updateSettings = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const body = req.body;
 
-    const existing = await db
-      .select()
-      .from(settings)
-      .limit(1);
+    const existing = await db.select().from(settings).limit(1);
 
     // 1. Update settings table
     const settingsPayload: Partial<typeof settings.$inferInsert> = {};
-    if (body.clinicName !== undefined) settingsPayload.clinicName = String(body.clinicName).trim();
-    if (body.supportEmail !== undefined) settingsPayload.supportEmail = body.supportEmail ? String(body.supportEmail).trim() : null;
-    if (body.clinicPhone !== undefined) settingsPayload.clinicPhone = body.clinicPhone ? String(body.clinicPhone).trim() : null;
-    if (body.defaultDuration !== undefined) settingsPayload.appointmentDuration = Number(body.defaultDuration);
-    else if (body.appointmentDuration !== undefined) settingsPayload.appointmentDuration = Number(body.appointmentDuration);
+    if (body.clinicName !== undefined)
+      settingsPayload.clinicName = String(body.clinicName).trim();
+    if (body.supportEmail !== undefined)
+      settingsPayload.supportEmail = body.supportEmail
+        ? String(body.supportEmail).trim()
+        : null;
+    if (body.clinicPhone !== undefined)
+      settingsPayload.clinicPhone = body.clinicPhone
+        ? String(body.clinicPhone).trim()
+        : null;
+    if (body.defaultDuration !== undefined)
+      settingsPayload.appointmentDuration = Number(body.defaultDuration);
+    else if (body.appointmentDuration !== undefined)
+      settingsPayload.appointmentDuration = Number(body.appointmentDuration);
 
-    if (body.bufferTimeMinutes !== undefined) settingsPayload.bufferTime = Number(body.bufferTimeMinutes);
-    else if (body.bufferTime !== undefined) settingsPayload.bufferTime = Number(body.bufferTime);
+    if (body.bufferTimeMinutes !== undefined)
+      settingsPayload.bufferTime = Number(body.bufferTimeMinutes);
+    else if (body.bufferTime !== undefined)
+      settingsPayload.bufferTime = Number(body.bufferTime);
 
     if (body.generalAppointmentSettings?.minNoticeHours !== undefined) {
-      settingsPayload.minNoticeHours = Number(body.generalAppointmentSettings.minNoticeHours);
+      settingsPayload.minNoticeHours = Number(
+        body.generalAppointmentSettings.minNoticeHours,
+      );
     } else if (body.minNoticeHours !== undefined) {
       settingsPayload.minNoticeHours = Number(body.minNoticeHours);
     }
 
     if (body.generalAppointmentSettings?.maxAdvanceDays !== undefined) {
-      settingsPayload.maxBookingDays = Number(body.generalAppointmentSettings.maxAdvanceDays);
+      settingsPayload.maxBookingDays = Number(
+        body.generalAppointmentSettings.maxAdvanceDays,
+      );
     } else if (body.maxBookingDays !== undefined) {
       settingsPayload.maxBookingDays = Number(body.maxBookingDays);
     }
 
-    if (body.meetingProvider !== undefined) settingsPayload.videoProvider = String(body.meetingProvider);
-    else if (body.videoProvider !== undefined) settingsPayload.videoProvider = String(body.videoProvider);
+    if (body.meetingProvider !== undefined)
+      settingsPayload.videoProvider = String(body.meetingProvider);
+    else if (body.videoProvider !== undefined)
+      settingsPayload.videoProvider = String(body.videoProvider);
 
     if (body.manualMeetingLink !== undefined) {
       settingsPayload.manualMeetingLink = body.manualMeetingLink
@@ -250,17 +281,27 @@ export const updateSettings = async (
         : null;
     }
 
-    if (body.workingHours !== undefined) settingsPayload.workingHours = body.workingHours;
-    if (body.doctorAvailability !== undefined) settingsPayload.doctorAvailability = body.doctorAvailability;
-    if (body.emailTemplates !== undefined) settingsPayload.emailTemplates = body.emailTemplates;
-    if (body.appointmentStatuses !== undefined) settingsPayload.appointmentStatuses = body.appointmentStatuses;
-    if (body.consultationTypes !== undefined) settingsPayload.consultationTypes = body.consultationTypes;
+    if (body.workingHours !== undefined)
+      settingsPayload.workingHours = body.workingHours;
+    if (body.doctorAvailability !== undefined)
+      settingsPayload.doctorAvailability = body.doctorAvailability;
+    if (body.emailTemplates !== undefined)
+      settingsPayload.emailTemplates = body.emailTemplates;
+    if (body.appointmentStatuses !== undefined)
+      settingsPayload.appointmentStatuses = body.appointmentStatuses;
+    if (body.consultationTypes !== undefined)
+      settingsPayload.consultationTypes = body.consultationTypes;
     if (body.generalAppointmentSettings !== undefined) {
-      settingsPayload.generalAppointmentSettings = body.generalAppointmentSettings;
+      settingsPayload.generalAppointmentSettings =
+        body.generalAppointmentSettings;
     }
 
-    if (body.emailEnabled !== undefined) settingsPayload.enableEmailNotifications = Boolean(body.emailEnabled);
-    else if (body.enableEmailNotifications !== undefined) settingsPayload.enableEmailNotifications = Boolean(body.enableEmailNotifications);
+    if (body.emailEnabled !== undefined)
+      settingsPayload.enableEmailNotifications = Boolean(body.emailEnabled);
+    else if (body.enableEmailNotifications !== undefined)
+      settingsPayload.enableEmailNotifications = Boolean(
+        body.enableEmailNotifications,
+      );
 
     settingsPayload.updatedAt = new Date();
 
@@ -297,12 +338,27 @@ export const updateSettings = async (
           .from(workingHours)
           .where(eq(workingHours.dayOfWeek, day));
 
-        const isWorking = item.isOpen !== undefined ? Boolean(item.isOpen) : (item.isWorking !== undefined ? Boolean(item.isWorking) : true);
-        const startTime = (item.openTime || item.startTime || "08:00").slice(0, 8);
+        const isWorking =
+          item.isOpen !== undefined
+            ? Boolean(item.isOpen)
+            : item.isWorking !== undefined
+              ? Boolean(item.isWorking)
+              : true;
+        const startTime = (item.openTime || item.startTime || "08:00").slice(
+          0,
+          8,
+        );
         const endTime = (item.closeTime || item.endTime || "19:00").slice(0, 8);
-        const hasBreak = item.hasBreak !== undefined ? Boolean(item.hasBreak) : true;
-        const breakStart = hasBreak && (item.breakStart || item.breakStart === "") ? item.breakStart.slice(0, 8) : null;
-        const breakEnd = hasBreak && (item.breakEnd || item.breakEnd === "") ? item.breakEnd.slice(0, 8) : null;
+        const hasBreak =
+          item.hasBreak !== undefined ? Boolean(item.hasBreak) : true;
+        const breakStart =
+          hasBreak && (item.breakStart || item.breakStart === "")
+            ? item.breakStart.slice(0, 8)
+            : null;
+        const breakEnd =
+          hasBreak && (item.breakEnd || item.breakEnd === "")
+            ? item.breakEnd.slice(0, 8)
+            : null;
 
         if (existingWh) {
           await db
@@ -369,7 +425,8 @@ export const updateSettings = async (
             .set({
               subject: tmpl.subject,
               body: tmpl.bodySummary || tmpl.body,
-              isActive: tmpl.enabled !== undefined ? Boolean(tmpl.enabled) : true,
+              isActive:
+                tmpl.enabled !== undefined ? Boolean(tmpl.enabled) : true,
               updatedAt: new Date(),
             })
             .where(eq(emailTemplates.id, Number(tmpl.id)));
@@ -389,7 +446,6 @@ export const updateSettings = async (
   }
 };
 
-
 /* =====================================================
    TREATMENTS
 ===================================================== */
@@ -397,12 +453,10 @@ export const updateSettings = async (
 export const getTreatments = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
-    const result = await db
-      .select()
-      .from(treatments);
+    const result = await db.select().from(treatments);
 
     res.json({
       success: true,
@@ -413,11 +467,10 @@ export const getTreatments = async (
   }
 };
 
-
 export const createTreatment = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { name, description } = req.body;
@@ -447,11 +500,10 @@ export const createTreatment = async (
   }
 };
 
-
 export const updateTreatment = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const id = Number(req.params.id);
@@ -479,11 +531,10 @@ export const updateTreatment = async (
   }
 };
 
-
 export const deleteTreatment = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const id = Number(req.params.id);
@@ -512,7 +563,6 @@ export const deleteTreatment = async (
   }
 };
 
-
 /* =====================================================
    APPOINTMENT STATUSES
 ===================================================== */
@@ -520,12 +570,10 @@ export const deleteTreatment = async (
 export const getStatuses = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
-    const result = await db
-      .select()
-      .from(appointmentStatuses);
+    const result = await db.select().from(appointmentStatuses);
 
     res.json({
       success: true,
@@ -536,11 +584,10 @@ export const getStatuses = async (
   }
 };
 
-
 export const createStatus = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { name } = req.body;
@@ -566,11 +613,10 @@ export const createStatus = async (
   }
 };
 
-
 export const updateStatus = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const id = Number(req.params.id);
@@ -600,11 +646,10 @@ export const updateStatus = async (
   }
 };
 
-
 export const deleteStatus = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const id = Number(req.params.id);
@@ -626,7 +671,6 @@ export const deleteStatus = async (
   }
 };
 
-
 /* =====================================================
    CONSULTATION TYPES
 ===================================================== */
@@ -634,12 +678,10 @@ export const deleteStatus = async (
 export const getConsultationTypes = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
-    const result = await db
-      .select()
-      .from(consultationTypes);
+    const result = await db.select().from(consultationTypes);
 
     res.json({
       success: true,
@@ -650,11 +692,10 @@ export const getConsultationTypes = async (
   }
 };
 
-
 export const createConsultationType = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { name, description } = req.body;
@@ -676,11 +717,10 @@ export const createConsultationType = async (
   }
 };
 
-
 export const updateConsultationType = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const id = Number(req.params.id);
@@ -703,11 +743,10 @@ export const updateConsultationType = async (
   }
 };
 
-
 export const deleteConsultationType = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const id = Number(req.params.id);
@@ -729,7 +768,6 @@ export const deleteConsultationType = async (
   }
 };
 
-
 /* =====================================================
    WORKING HOURS
 ===================================================== */
@@ -737,12 +775,10 @@ export const deleteConsultationType = async (
 export const getWorkingHours = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
-    const result = await db
-      .select()
-      .from(workingHours);
+    const result = await db.select().from(workingHours);
 
     res.json({
       success: true,
@@ -753,11 +789,10 @@ export const getWorkingHours = async (
   }
 };
 
-
 export const updateWorkingHours = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const data = req.body;
@@ -777,15 +812,11 @@ export const updateWorkingHours = async (
           })
           .where(eq(workingHours.id, item.id));
       } else {
-        await db
-          .insert(workingHours)
-          .values(item);
+        await db.insert(workingHours).values(item);
       }
     }
 
-    const result = await db
-      .select()
-      .from(workingHours);
+    const result = await db.select().from(workingHours);
 
     res.json({
       success: true,
@@ -797,7 +828,6 @@ export const updateWorkingHours = async (
   }
 };
 
-
 /* =====================================================
    REMINDERS
 ===================================================== */
@@ -805,12 +835,10 @@ export const updateWorkingHours = async (
 export const getReminders = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
-    const result = await db
-      .select()
-      .from(reminderSettings);
+    const result = await db.select().from(reminderSettings);
 
     res.json({
       success: true,
@@ -821,11 +849,10 @@ export const getReminders = async (
   }
 };
 
-
 export const createReminder = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const [result] = await db
@@ -842,11 +869,10 @@ export const createReminder = async (
   }
 };
 
-
 export const updateReminder = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const id = Number(req.params.id);
@@ -869,18 +895,15 @@ export const updateReminder = async (
   }
 };
 
-
 export const deleteReminder = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const id = Number(req.params.id);
 
-    await db
-      .delete(reminderSettings)
-      .where(eq(reminderSettings.id, id));
+    await db.delete(reminderSettings).where(eq(reminderSettings.id, id));
 
     res.json({
       success: true,
@@ -891,7 +914,6 @@ export const deleteReminder = async (
   }
 };
 
-
 /* =====================================================
    EMAIL TEMPLATES
 ===================================================== */
@@ -899,12 +921,10 @@ export const deleteReminder = async (
 export const getEmailTemplates = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
-    const result = await db
-      .select()
-      .from(emailTemplates);
+    const result = await db.select().from(emailTemplates);
 
     res.json({
       success: true,
@@ -915,11 +935,10 @@ export const getEmailTemplates = async (
   }
 };
 
-
 export const updateEmailTemplate = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const id = Number(req.params.id);

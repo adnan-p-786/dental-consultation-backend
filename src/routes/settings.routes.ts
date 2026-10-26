@@ -3,30 +3,24 @@ import { Router } from "express";
 import {
   getSettings,
   updateSettings,
-
   getTreatments,
   createTreatment,
   updateTreatment,
   deleteTreatment,
-
   getStatuses,
   createStatus,
   updateStatus,
   deleteStatus,
-
   getConsultationTypes,
   createConsultationType,
   updateConsultationType,
   deleteConsultationType,
-
   getWorkingHours,
   updateWorkingHours,
-
   getReminders,
   createReminder,
   updateReminder,
   deleteReminder,
-
   getEmailTemplates,
   updateEmailTemplate,
 } from "../controllers/settingsController";
@@ -42,20 +36,9 @@ const router = Router();
 |--------------------------------------------------------------------------
 */
 
-router.get(
-  "/",
-  authenticate,
-  requireRole("admin"),
-  getSettings
-);
+router.get("/", authenticate, requireRole("superadmin"), getSettings);
 
-router.put(
-  "/",
-  authenticate,
-  requireRole("admin"),
-  updateSettings
-);
-
+router.put("/", authenticate, requireRole("superadmin"), updateSettings);
 
 /*
 |--------------------------------------------------------------------------
@@ -63,34 +46,23 @@ router.put(
 |--------------------------------------------------------------------------
 */
 
-router.get(
-  "/treatments",
-  authenticate,
-  requireRole("admin"),
-  getTreatments
-);
+router.get("/treatments", authenticate, requireRole("superadmin"), getTreatments);
 
-router.post(
-  "/treatments",
-  authenticate,
-  requireRole("admin"),
-  createTreatment
-);
+router.post("/treatments", authenticate, requireRole("superadmin"), createTreatment);
 
 router.put(
   "/treatments/:id",
   authenticate,
-  requireRole("admin"),
-  updateTreatment
+  requireRole("superadmin"),
+  updateTreatment,
 );
 
 router.delete(
   "/treatments/:id",
   authenticate,
-  requireRole("admin"),
-  deleteTreatment
+  requireRole("superadmin"),
+  deleteTreatment,
 );
-
 
 /*
 |--------------------------------------------------------------------------
@@ -98,34 +70,18 @@ router.delete(
 |--------------------------------------------------------------------------
 */
 
-router.get(
-  "/statuses",
-  authenticate,
-  requireRole("admin"),
-  getStatuses
-);
+router.get("/statuses", authenticate, requireRole("superadmin"), getStatuses);
 
-router.post(
-  "/statuses",
-  authenticate,
-  requireRole("admin"),
-  createStatus
-);
+router.post("/statuses", authenticate, requireRole("superadmin"), createStatus);
 
-router.put(
-  "/statuses/:id",
-  authenticate,
-  requireRole("admin"),
-  updateStatus
-);
+router.put("/statuses/:id", authenticate, requireRole("superadmin"), updateStatus);
 
 router.delete(
   "/statuses/:id",
   authenticate,
-  requireRole("admin"),
-  deleteStatus
+  requireRole("superadmin"),
+  deleteStatus,
 );
-
 
 /*
 |--------------------------------------------------------------------------
@@ -136,31 +92,30 @@ router.delete(
 router.get(
   "/consultation-types",
   authenticate,
-  requireRole("admin"),
-  getConsultationTypes
+  requireRole("superadmin"),
+  getConsultationTypes,
 );
 
 router.post(
   "/consultation-types",
   authenticate,
-  requireRole("admin"),
-  createConsultationType
+  requireRole("superadmin"),
+  createConsultationType,
 );
 
 router.put(
   "/consultation-types/:id",
   authenticate,
-  requireRole("admin"),
-  updateConsultationType
+  requireRole("superadmin"),
+  updateConsultationType,
 );
 
 router.delete(
   "/consultation-types/:id",
   authenticate,
-  requireRole("admin"),
-  deleteConsultationType
+  requireRole("superadmin"),
+  deleteConsultationType,
 );
-
 
 /*
 |--------------------------------------------------------------------------
@@ -171,17 +126,16 @@ router.delete(
 router.get(
   "/working-hours",
   authenticate,
-  requireRole("admin"),
-  getWorkingHours
+  requireRole("superadmin"),
+  getWorkingHours,
 );
 
 router.put(
   "/working-hours",
   authenticate,
-  requireRole("admin"),
-  updateWorkingHours
+  requireRole("superadmin"),
+  updateWorkingHours,
 );
-
 
 /*
 |--------------------------------------------------------------------------
@@ -189,34 +143,23 @@ router.put(
 |--------------------------------------------------------------------------
 */
 
-router.get(
-  "/reminders",
-  authenticate,
-  requireRole("admin"),
-  getReminders
-);
+router.get("/reminders", authenticate, requireRole("superadmin"), getReminders);
 
-router.post(
-  "/reminders",
-  authenticate,
-  requireRole("admin"),
-  createReminder
-);
+router.post("/reminders", authenticate, requireRole("superadmin"), createReminder);
 
 router.put(
   "/reminders/:id",
   authenticate,
-  requireRole("admin"),
-  updateReminder
+  requireRole("superadmin"),
+  updateReminder,
 );
 
 router.delete(
   "/reminders/:id",
   authenticate,
-  requireRole("admin"),
-  deleteReminder
+  requireRole("superadmin"),
+  deleteReminder,
 );
-
 
 /*
 |--------------------------------------------------------------------------
@@ -227,15 +170,15 @@ router.delete(
 router.get(
   "/email-templates",
   authenticate,
-  requireRole("admin"),
-  getEmailTemplates
+  requireRole("superadmin"),
+  getEmailTemplates,
 );
 
 router.put(
   "/email-templates/:id",
   authenticate,
-  requireRole("admin"),
-  updateEmailTemplate
+  requireRole("superadmin"),
+  updateEmailTemplate,
 );
 
 export default router;
