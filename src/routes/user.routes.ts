@@ -39,7 +39,7 @@ router.patch("/patient-profile", authenticate, updatePatientProfile);
 router.get(
   "/patients",
   authenticate,
-  requireRole("superadmin", "admin"),
+  requireRole("superadmin", "admin", "doctor"),
   getAllPatients,
 );
 router.delete(

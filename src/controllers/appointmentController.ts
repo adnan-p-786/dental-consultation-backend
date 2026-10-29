@@ -5,6 +5,7 @@ import { appointments } from "../db/schema/appointment";
 import { consultations } from "../db/schema/consultation";
 import { doctor } from "../db/schema/doctor";
 import { users } from "../db/schema/user";
+import { patientProfile } from "../db/schema/patient";
 import {
   sendAppointmentAcknowledgment,
   sendProposedScheduleNotification,
@@ -12,7 +13,7 @@ import {
   sendAppointmentCancelledNotification,
   sendAppointmentReminderNotification,
 } from "../services/emailService";
-import { eq, desc, ilike, or } from "drizzle-orm";
+import { eq, desc, ilike, or, sql } from "drizzle-orm";
 import {
   getReminderConfig,
   saveReminderConfig,
@@ -209,43 +210,54 @@ export const getAllAppointment = async (
       conditions.push(ilike(appointments.patientName, `%${name}%`));
     }
 
+    const selectFields = {
+      appointment: appointments,
+      consultation: consultations,
+      patientAge: patientProfile.age,
+      patientGender: patientProfile.gender,
+      patientAddress: patientProfile.address,
+    };
+
     let rows;
     if (email) {
       rows = await db
-        .select({
-          appointment: appointments,
-          consultation: consultations,
-        })
+        .select(selectFields)
         .from(appointments)
         .leftJoin(
           consultations,
           eq(appointments.id, consultations.appointmentId),
+        )
+        .leftJoin(
+          patientProfile,
+          sql`lower(trim(${appointments.patientEmail})) = lower(trim(${patientProfile.email}))`,
         )
         .where(ilike(appointments.patientEmail, email))
         .orderBy(desc(appointments.id));
     } else if (conditions.length > 0) {
       rows = await db
-        .select({
-          appointment: appointments,
-          consultation: consultations,
-        })
+        .select(selectFields)
         .from(appointments)
         .leftJoin(
           consultations,
           eq(appointments.id, consultations.appointmentId),
         )
+        .leftJoin(
+          patientProfile,
+          sql`lower(trim(${appointments.patientEmail})) = lower(trim(${patientProfile.email}))`,
+        )
         .where(or(...conditions))
         .orderBy(desc(appointments.id));
     } else {
       rows = await db
-        .select({
-          appointment: appointments,
-          consultation: consultations,
-        })
+        .select(selectFields)
         .from(appointments)
         .leftJoin(
           consultations,
           eq(appointments.id, consultations.appointmentId),
+        )
+        .leftJoin(
+          patientProfile,
+          sql`lower(trim(${appointments.patientEmail})) = lower(trim(${patientProfile.email}))`,
         )
         .orderBy(desc(appointments.id));
     }
@@ -267,6 +279,9 @@ export const getAllAppointment = async (
 
       return {
         ...r.appointment,
+        patientAge: r.patientAge ?? null,
+        patientGender: r.patientGender ?? null,
+        patientAddress: r.patientAddress ?? null,
         assignedDoctorPhoto: matchedDoc?.doctorPhoto || null,
         assignedDoctorSpecialization: matchedDoc?.specialization || null,
         consultation: r.consultation || null,
@@ -304,9 +319,16 @@ export const getPatientAppointments = async (
       .select({
         appointment: appointments,
         consultation: consultations,
+        patientAge: patientProfile.age,
+        patientGender: patientProfile.gender,
+        patientAddress: patientProfile.address,
       })
       .from(appointments)
       .leftJoin(consultations, eq(appointments.id, consultations.appointmentId))
+      .leftJoin(
+        patientProfile,
+        sql`lower(trim(${appointments.patientEmail})) = lower(trim(${patientProfile.email}))`,
+      )
       .where(ilike(appointments.patientEmail, email))
       .orderBy(desc(appointments.id));
 
@@ -327,6 +349,9 @@ export const getPatientAppointments = async (
 
       return {
         ...r.appointment,
+        patientAge: r.patientAge ?? null,
+        patientGender: r.patientGender ?? null,
+        patientAddress: r.patientAddress ?? null,
         assignedDoctorPhoto: matchedDoc?.doctorPhoto || null,
         assignedDoctorSpecialization: matchedDoc?.specialization || null,
         consultation: r.consultation || null,
