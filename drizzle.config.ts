@@ -1,6 +1,8 @@
-
 import "dotenv/config";
 import { defineConfig } from "drizzle-kit";
+
+// Drizzle kit requires direct (non-pooler) connection on Neon
+const dbUrl = (process.env.DATABASE_URL || "").replace("-pooler", "");
 
 export default defineConfig({
   schema: "./src/db/schema/**/*.ts",
@@ -8,6 +10,6 @@ export default defineConfig({
   dialect: "postgresql",
 
   dbCredentials: {
-    url: process.env.DATABASE_URL!,
+    url: dbUrl,
   },
 });
