@@ -20,12 +20,18 @@ export const hashPassword = async (password: string): Promise<string> => {
   return await bcrypt.hash(password, 10);
 };
 
-// Compare password
+// Compare password (supports bcrypt hash and plain-text fallback for manually seeded accounts)
 export const comparePassword = async (
   password: string,
   hashedPassword: string,
 ): Promise<boolean> => {
-  return await bcrypt.compare(password, hashedPassword);
+  try {
+    const isMatch = await bcrypt.compare(password, hashedPassword);
+    if (isMatch) return true;
+  } catch {
+    // ignore format errors if not a standard bcrypt hash
+  }
+  return password === hashedPassword;
 };
 
 // Generate JWT
